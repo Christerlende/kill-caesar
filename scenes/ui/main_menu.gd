@@ -9,4 +9,4 @@ func _ready() -> void:
 
 func _on_start_button_pressed() -> void:
 	print("Start Game pressed")
-	emit_signal("start_game_pressed")
+	start_game_pressed.emit()

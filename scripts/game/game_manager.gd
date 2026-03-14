@@ -22,6 +22,130 @@ func role_name(role: int) -> String:
 			return "Plebian"
 		_:
 			return "Unknown"
+
+func _alignment_score(role: int, beneficiary: int) -> int:
+	if role == beneficiary:
+		return 2
+	if role == Role.CAESAR and beneficiary == Role.PATRICIAN:
+		return 1
+	if role == Role.CAESAR and beneficiary == Role.PLEBIAN:
+		return -1
+	if role == Role.PATRICIAN and beneficiary == Role.PLEBIAN:
+		return -2
+	if role == Role.PLEBIAN and beneficiary == Role.PATRICIAN:
+		return -2
+	return 0
+
+func _pick_ai_nominee() -> int:
+	var candidates = get_nominee_candidates()
+	if candidates.size() == 0:
+		return -1
+	var consul_role = state.players[state.current_consul_index].role
+	var best_candidate = candidates[0]
+	var best_score = -99999
+	for candidate_index in candidates:
+		var candidate = state.players[candidate_index]
+		var score = _alignment_score(consul_role, candidate.role) * 10 - candidate.co_consul_count
+		if score > best_score:
+			best_score = score
+			best_candidate = candidate_index
+	return best_candidate
+
+func auto_select_ai_nominee() -> bool:
+	if state.game_phase != "election" or state.election_nominee_index >= 0:
+		return false
+	if not state.players[state.current_consul_index].is_ai:
+		return false
+	var nominee = _pick_ai_nominee()
+	if nominee < 0:
+		return false
+	return select_election_nominee(nominee)
+
+func _should_ai_vote_yes(voter_id: int, nominee_id: int) -> bool:
+	var voter = state.players[voter_id]
+	var nominee = state.players[nominee_id]
+
+	if voter.role == nominee.role:
+		return true
+	if voter.role == Role.CAESAR:
+		return true
+
+	if voter.role == Role.PATRICIAN and nominee.role == Role.PLEBIAN:
+		return state.influence_plebian > state.influence_patrician + 1
+	if voter.role == Role.PLEBIAN and nominee.role == Role.PATRICIAN:
+		return state.influence_patrician > state.influence_plebian + 1
+
+	return true
+
+func auto_fill_ai_election_votes() -> void:
+	if state.game_phase != "election" or state.election_nominee_index < 0:
+		return
+	var yes_count = 0
+	for vote in state.election_vote_inputs:
+		if vote == 1:
+			yes_count += 1
+	for player_id in range(state.players.size()):
+		if state.election_vote_inputs[player_id] != -1:
+			continue
+		if not state.players[player_id].is_ai:
+			continue
+		var remaining_ai_unset = 0
+		for j in range(player_id + 1, state.players.size()):
+			if state.election_vote_inputs[j] == -1 and state.players[j].is_ai:
+				remaining_ai_unset += 1
+		var needed_yes = 5 - yes_count
+		var must_vote_yes = needed_yes > 0 and needed_yes >= (remaining_ai_unset + 1)
+		var vote_yes = must_vote_yes or _should_ai_vote_yes(player_id, state.election_nominee_index)
+		set_election_vote(player_id, vote_yes)
+		if vote_yes:
+			yes_count += 1
+
+func _pick_ai_spending_choice(player_id: int) -> Dictionary:
+	var player = state.players[player_id]
+	var money = player.money
+	if money <= 0:
+		return {"option": "A", "amount": 0}
+
+	var a_score = _alignment_score(player.role, state.policy_enacted.option_a_beneficiary)
+	var b_score = _alignment_score(player.role, state.policy_enacted.option_b_beneficiary)
+	var option = "A"
+	var score = a_score
+	if b_score > a_score or (b_score == a_score and state.policy_enacted.option_b_gold_amount > state.policy_enacted.option_a_gold_amount):
+		option = "B"
+		score = b_score
+
+	var spend_ratio = 0.35
+	if score >= 2:
+		spend_ratio = 0.75
+	elif score == 1:
+		spend_ratio = 0.6
+	elif score < 0:
+		spend_ratio = 0.15
+
+	var amount = int(round(float(money) * spend_ratio))
+	amount = clamp(amount, 0, money)
+	return {"option": option, "amount": amount}
+
+func auto_run_ai_spending_inputs() -> void:
+	if state.game_phase != "spending":
+		return
+	while true:
+		if state.spending_stage == "resolved":
+			return
+		if state.spending_stage == "handoff":
+			if not advance_spending_turn():
+				return
+			continue
+		if state.spending_stage != "input":
+			return
+		var player_id = state.spending_input_player_index
+		if player_id < 0 or player_id >= state.players.size():
+			return
+		if not state.players[player_id].is_ai:
+			return
+		var choice = _pick_ai_spending_choice(player_id)
+		set_spending_allocation(choice.get("option", "A"), choice.get("amount", 0))
+
 # Election: consul nominates and players vote
 # Policy: consul/co-consul discard, apply influence, run money vote
 # Phase flow controlled by state.game_phase
@@ -172,7 +296,7 @@ func conduct_election() -> bool:
 	var yes = state.election_votes_yes.size()
 	var no = state.election_votes_no.size()
 	print("Votes - yes: %d no: %d" % [yes, no])
-	if yes >= 1:
+	if yes > 3:
 		state.election_passed = true
 		print("Election passed, player %d is co-consul" % nominee)
 		state.current_co_consul_index = nominee
@@ -360,8 +484,12 @@ func progress():
 			state.game_phase = "election"
 		"election":
 			if state.election_nominee_index < 0:
+				auto_select_ai_nominee()
+			if state.election_nominee_index < 0:
 				print("Select a co-consul nominee first")
 				return
+			if not are_election_votes_complete():
+				auto_fill_ai_election_votes()
 			if not are_election_votes_complete():
 				print("Set all election votes first")
 				return
@@ -377,6 +505,8 @@ func progress():
 			state.game_phase = "spending"
 			start_spending_phase()
 		"spending":
+			if state.spending_stage != "resolved":
+				auto_run_ai_spending_inputs()
 			if state.spending_stage != "resolved":
 				print("Complete private spending for all players first")
 				return

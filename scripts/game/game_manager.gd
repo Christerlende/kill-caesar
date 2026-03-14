@@ -267,7 +267,7 @@ func start_spending_phase() -> void:
 	state.spending_private_inputs.clear()
 	state.spending_confirmed_players.clear()
 	for i in range(state.players.size()):
-		state.spending_private_inputs.append({"a": 0, "b": 0})
+		state.spending_private_inputs.append({"option": "A", "amount": 0})
 		state.spending_confirmed_players.append(false)
 	state.spending_input_player_index = 0
 	state.spending_stage = "input"
@@ -281,17 +281,18 @@ func get_current_spending_player_money() -> int:
 		return 0
 	return state.players[state.spending_input_player_index].money
 
-func set_spending_allocation(option_a_amount: int) -> bool:
+func set_spending_allocation(option_key: String, spend_amount: int) -> bool:
 	if state.game_phase != "spending" or state.spending_stage != "input":
 		return false
 	var player_id = state.spending_input_player_index
 	if player_id < 0 or player_id >= state.players.size():
 		return false
-	var total_money = state.players[player_id].money
-	if option_a_amount < 0 or option_a_amount > total_money:
+	if option_key != "A" and option_key != "B":
 		return false
-	var option_b_amount = total_money - option_a_amount
-	state.spending_private_inputs[player_id] = {"a": option_a_amount, "b": option_b_amount}
+	var total_money = state.players[player_id].money
+	if spend_amount < 0 or spend_amount > total_money:
+		return false
+	state.spending_private_inputs[player_id] = {"option": option_key, "amount": spend_amount}
 	state.spending_confirmed_players[player_id] = true
 	state.spending_stage = "handoff"
 	print("Player %d spending captured privately." % player_id)
@@ -317,10 +318,15 @@ func resolve_spending_totals() -> void:
 	var total_a = 0
 	var total_b = 0
 	for player_id in range(state.players.size()):
-		var split = state.spending_private_inputs[player_id]
-		total_a += split.get("a", 0)
-		total_b += split.get("b", 0)
-		state.players[player_id].money = 0
+		var allocation = state.spending_private_inputs[player_id]
+		var chosen_option = allocation.get("option", "A")
+		var spent_amount = allocation.get("amount", 0)
+		if chosen_option == "A":
+			total_a += spent_amount
+		else:
+			total_b += spent_amount
+		# unspent gold remains in the player's purse for future rounds
+		state.players[player_id].money = max(state.players[player_id].money - spent_amount, 0)
 	state.spending_option_a_total = total_a
 	state.spending_option_b_total = total_b
 	print("Money vote totals A:%d B:%d" % [total_a, total_b])

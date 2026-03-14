@@ -182,24 +182,37 @@ func _update_spending_controls(state) -> void:
 		title.text = "Private spending input: Player %d" % player_id
 		spending_controls_container.add_child(title)
 		var hint = Label.new()
-		hint.text = "Choose how much goes to Option A. Remaining goes to Option B."
+		hint.text = "Choose one option and how much to spend. Unspent gold stays in your purse."
 		spending_controls_container.add_child(hint)
-		var buttons_row = HBoxContainer.new()
+		var option_a_label = Label.new()
+		option_a_label.text = "Spend on Option A"
+		spending_controls_container.add_child(option_a_label)
+		var option_a_row = HBoxContainer.new()
 		for amount_a in range(money + 1):
-			var b = Button.new()
-			var amount_b = money - amount_a
-			b.text = "A:%d / B:%d" % [amount_a, amount_b]
-			b.pressed.connect(Callable(self, "_on_spending_split_pressed").bind(amount_a))
-			buttons_row.add_child(b)
-		spending_controls_container.add_child(buttons_row)
+			var a_button = Button.new()
+			a_button.text = "A: %d" % amount_a
+			a_button.pressed.connect(Callable(self, "_on_spending_choice_pressed").bind("A", amount_a))
+			option_a_row.add_child(a_button)
+		spending_controls_container.add_child(option_a_row)
+
+		var option_b_label = Label.new()
+		option_b_label.text = "Spend on Option B"
+		spending_controls_container.add_child(option_b_label)
+		var option_b_row = HBoxContainer.new()
+		for amount_b in range(money + 1):
+			var b_button = Button.new()
+			b_button.text = "B: %d" % amount_b
+			b_button.pressed.connect(Callable(self, "_on_spending_choice_pressed").bind("B", amount_b))
+			option_b_row.add_child(b_button)
+		spending_controls_container.add_child(option_b_row)
 	elif state.spending_stage == "handoff":
 		var handoff = Label.new()
 		handoff.text = "Private entry saved. Pass to next player."
 		spending_controls_container.add_child(handoff)
-		var ready = Button.new()
-		ready.text = "Ready for next player"
-		ready.pressed.connect(Callable(self, "_on_spending_ready_next_pressed"))
-		spending_controls_container.add_child(ready)
+		var ready_button = Button.new()
+		ready_button.text = "Ready for next player"
+		ready_button.pressed.connect(Callable(self, "_on_spending_ready_next_pressed"))
+		spending_controls_container.add_child(ready_button)
 	elif state.spending_stage == "resolved":
 		var done = Label.new()
 		done.text = "All private spending captured. Totals are now public."
@@ -263,6 +276,7 @@ func _build_phase_text(state) -> String:
 		lines.append("")
 		lines.append("Private spending input in progress")
 		lines.append("Current player: Player %d" % state.spending_input_player_index)
+		lines.append("Each player chooses one option and an amount to spend")
 	elif state.game_phase == "spending" and state.spending_stage == "handoff":
 		lines.append("")
 		lines.append("Pass device to next player")
@@ -319,8 +333,8 @@ func _on_vote_no_pressed(player_id: int) -> void:
 func _on_policy_discard_pressed(policy_id: int) -> void:
 	game_manager.discard_policy_by_id(policy_id)
 
-func _on_spending_split_pressed(amount_a: int) -> void:
-	game_manager.set_spending_allocation(amount_a)
+func _on_spending_choice_pressed(option_key: String, spend_amount: int) -> void:
+	game_manager.set_spending_allocation(option_key, spend_amount)
 
 func _on_spending_ready_next_pressed() -> void:
 	game_manager.advance_spending_turn()

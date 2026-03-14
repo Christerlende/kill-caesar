@@ -32,7 +32,7 @@ var spending_option_b_total: int = 0
 var spending_winner: String = ""
 var spending_stage: String = "idle"  # idle, input, handoff, resolved
 var spending_input_player_index: int = -1
-var spending_private_inputs: Array = []  # [{"a": int, "b": int}, ...]
+var spending_private_inputs: Array = []  # [{"option": "A"|"B", "amount": int}, ...]
 var spending_confirmed_players: Array = []  # bool per player
 
 func _init():

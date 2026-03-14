@@ -48,7 +48,11 @@ func _process(_delta):
 		influence_label.text = "Influence P:%d / L:%d" % [state.influence_patrician, state.influence_plebian]
 	if consul_label:
 		var consul = state.players[state.current_consul_index]
-		consul_label.text = "Consul: %d (role %d) | Phase: %s" % [consul.player_id, consul.role, state.game_phase]
+		var co_consul_text = "Not chosen yet"
+		if state.current_co_consul_index >= 0:
+			var co_consul = state.players[state.current_co_consul_index]
+			co_consul_text = "Player %d (%s)" % [co_consul.player_id, game_manager.role_name(co_consul.role)]
+		consul_label.text = "Consul: Player %d (%s) | Co-Consul: %s | Phase: %s" % [consul.player_id, game_manager.role_name(consul.role), co_consul_text, state.game_phase]
 
 func _on_NextButton_pressed():
 	print("Next button pressed")

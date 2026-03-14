@@ -1,0 +1,46 @@
+[gd_scene format=3 uid="uid://du8vsklrpejk1"]
+[ext_resource path="res://scripts/ui/game_ui.gd" type="Script" id=1]
+
+[node name="GameUI" type="Control" unique_id=1929849995]
+script = ExtResource(1)
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="GameUI" unique_id=1894163768]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="RoundLabel" type="Label" parent="VBoxContainer" unique_id=1472271048]
+layout_mode = 0
+offset_left = 908.0
+offset_top = 449.0
+offset_right = 976.0
+offset_bottom = 472.0
+text = "Round: 0"
+
+[node name="InfluenceLabel" type="Label" parent="VBoxContainer" unique_id=1526835739]
+layout_mode = 0
+offset_left = 479.0
+offset_top = 449.0
+offset_right = 616.0
+offset_bottom = 472.0
+text = "Influence P:0 / L:0"
+
+[node name="ConsulLabel" type="Label" parent="VBoxContainer" unique_id=278773045]
+layout_mode = 0
+offset_left = 68.0
+offset_top = 456.0
+offset_right = 190.0
+offset_bottom = 479.0
+text = "Consul: none"
+
+[node name="NextButton" type="Button" parent="VBoxContainer" unique_id=1842532756]
+layout_mode = 0
+offset_left = 514.0
+offset_top = 566.0
+offset_right = 597.0
+offset_bottom = 597.0
+text = "Next step"

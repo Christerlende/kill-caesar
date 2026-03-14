@@ -27,6 +27,22 @@ text = "Influence P:0 / L:0"
 [node name="ConsulLabel" type="Label" parent="GameUI/VBoxContainer" unique_id=1299466159]
 text = "Consul: none"
 
+[node name="NomineeButtonsContainer" type="HBoxContainer" parent="GameUI/VBoxContainer"]
+
+[node name="ElectionVotesContainer" type="VBoxContainer" parent="GameUI/VBoxContainer"]
+
+[node name="PolicyDiscardButtonsContainer" type="HBoxContainer" parent="GameUI/VBoxContainer"]
+
+[node name="SpendingControlsContainer" type="VBoxContainer" parent="GameUI/VBoxContainer"]
+
+[node name="PlayerPursesLabel" type="Label" parent="GameUI/VBoxContainer"]
+text = "Player 0 (Role): 0"
+autowrap_mode = 3
+
+[node name="PhaseInfoLabel" type="Label" parent="GameUI/VBoxContainer"]
+text = "Phase: init"
+autowrap_mode = 3
+
 [node name="NextButton" type="Button" parent="GameUI/VBoxContainer" unique_id=1981204338]
 offset_left = 69.0
 offset_top = 43.0

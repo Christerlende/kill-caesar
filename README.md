@@ -42,16 +42,16 @@ Or open VS Code, choose **File → Open Folder…**, and select the `kill-caesar
 
 ### 3 — Check out a branch
 
-To switch to a specific branch (for example the main-menu feature branch):
+To switch to a specific branch (for example, a feature branch you or someone else has pushed to the remote):
 
 **Option A — using the VS Code Source Control panel (recommended for beginners)**
 
 1. Click the **Source Control** icon in the left sidebar (the branching icon, or press `Ctrl+Shift+G`).
 2. Click the branch name shown in the bottom-left status bar (e.g. `main`).
-3. A dropdown appears at the top of the screen listing all remote branches.
-4. Type or scroll to find `origin/FEAT-main-menu-screen` and click it.
-5. VS Code will ask *"Would you like to create a local branch?"* — click **Create local branch**.
-6. You are now on the branch and can edit files normally.
+3. A dropdown appears at the top of the screen listing all local and remote branches.
+4. Type or scroll to find the branch you want to work on (for example `origin/feature/my-task`) and click it.
+5. If prompted *"Would you like to create a local branch?"*, click **Create local branch** to create a local tracking branch.
+6. You are now on that branch and can edit files normally.
 
 **Option B — using the integrated terminal**
 
@@ -60,10 +60,10 @@ To switch to a specific branch (for example the main-menu feature branch):
 
 ```bash
 git fetch origin
-git checkout -b FEAT-main-menu-screen origin/FEAT-main-menu-screen
+git checkout -b <local-branch-name> origin/<remote-branch-name>
 ```
 
-You are now on the branch.
+Replace `<remote-branch-name>` with the name of the remote branch you want to track (for example `feature/my-task`), and `<local-branch-name>` with the name you want to use locally (often the same).
 
 ### 4 — Connect VS Code to the Godot editor
 

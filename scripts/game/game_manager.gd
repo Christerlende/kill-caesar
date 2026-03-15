@@ -7,10 +7,16 @@ const Role = preload("res://scripts/data/role.gd").Role
 const Player = preload("res://scripts/data/player.gd")
 const Policy = preload("res://scripts/data/policy.gd")
 const GameState = preload("res://scripts/data/game_state.gd")
+static var influence_to_win: int = 5
+static var last_winner_text: String = ""
+static var last_patrician_influence: int = 0
+static var last_plebian_influence: int = 0
+static var last_round_number: int = 0
 
 @onready var state: GameState = GameState.new()
 var pending_policy_choices: Array = []
 var policy_discard_stage: String = ""
+var _game_over_handled: bool = false
 
 func role_name(role: int) -> String:
 	match role:
@@ -464,12 +470,26 @@ func resolve_spending_totals() -> void:
 	check_win_condition()
 
 func check_win_condition() -> void:
-	if state.influence_patrician >= 5:
+	if _game_over_handled:
+		return
+	if state.influence_patrician >= influence_to_win:
 		state.game_phase = "game_over"
+		last_winner_text = "Patricians"
+		last_patrician_influence = state.influence_patrician
+		last_plebian_influence = state.influence_plebian
+		last_round_number = state.round_number
+		_game_over_handled = true
 		print("Patricians win! Influence reached %d" % state.influence_patrician)
-	elif state.influence_plebian >= 5:
+		get_tree().change_scene_to_file("res://scenes/ui/end_game.tscn")
+	elif state.influence_plebian >= influence_to_win:
 		state.game_phase = "game_over"
+		last_winner_text = "Plebians"
+		last_patrician_influence = state.influence_patrician
+		last_plebian_influence = state.influence_plebian
+		last_round_number = state.round_number
+		_game_over_handled = true
 		print("Plebians win! Influence reached %d" % state.influence_plebian)
+		get_tree().change_scene_to_file("res://scenes/ui/end_game.tscn")
 
 func apply_benefit(faction: int, amount: int) -> void:
 	for pl in state.players:

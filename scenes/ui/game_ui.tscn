@@ -37,6 +37,11 @@ offset_right = 190.0
 offset_bottom = 479.0
 text = "Consul: none"
 
+[node name="ActorPromptLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Current actor: -"
+autowrap_mode = 3
+
 [node name="NomineeButtonsContainer" type="HBoxContainer" parent="VBoxContainer"]
 layout_mode = 2
 

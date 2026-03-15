@@ -4,6 +4,7 @@ var game_manager
 var round_label: Label
 var influence_label: Label
 var consul_label: Label
+var actor_prompt_label: Label
 var nominee_buttons_container: HBoxContainer
 var election_votes_container: VBoxContainer
 var policy_discard_buttons_container: HBoxContainer
@@ -15,6 +16,9 @@ var _nominee_ui_key: String = ""
 var _vote_ui_key: String = ""
 var _policy_ui_key: String = ""
 var _spending_ui_key: String = ""
+var _last_seen_round: int = -1
+var _round_transition_message: String = ""
+var _round_transition_time_left: float = 0.0
 
 func _ready():
 	# determine game manager reference
@@ -33,6 +37,7 @@ func _ready():
 	round_label = $VBoxContainer.get_node_or_null("RoundLabel")
 	influence_label = $VBoxContainer.get_node_or_null("InfluenceLabel")
 	consul_label = $VBoxContainer.get_node_or_null("ConsulLabel")
+	actor_prompt_label = $VBoxContainer.get_node_or_null("ActorPromptLabel")
 	nominee_buttons_container = $VBoxContainer.get_node_or_null("NomineeButtonsContainer")
 	election_votes_container = $VBoxContainer.get_node_or_null("ElectionVotesContainer")
 	policy_discard_buttons_container = $VBoxContainer.get_node_or_null("PolicyDiscardButtonsContainer")
@@ -40,7 +45,7 @@ func _ready():
 	player_purses_label = $VBoxContainer.get_node_or_null("PlayerPursesLabel")
 	phase_info_label = $VBoxContainer.get_node_or_null("PhaseInfoLabel")
 	next_button = $VBoxContainer.get_node_or_null("NextButton")
-	print("labels:", round_label, influence_label, consul_label, nominee_buttons_container, election_votes_container, policy_discard_buttons_container, spending_controls_container, player_purses_label, phase_info_label, "button", next_button)
+	print("labels:", round_label, influence_label, consul_label, actor_prompt_label, nominee_buttons_container, election_votes_container, policy_discard_buttons_container, spending_controls_container, player_purses_label, phase_info_label, "button", next_button)
 
 	# debug: list children
 	print("GameUI children:", get_children())
@@ -58,6 +63,14 @@ func _process(_delta):
 	var state = game_manager.state
 	if not state:
 		return
+	if state.round_number != _last_seen_round:
+		_last_seen_round = state.round_number
+		if state.players.size() > 0:
+			var round_consul = state.players[state.current_consul_index]
+			_round_transition_message = "Round %d starts. Consul: Player %d (%s)" % [state.round_number, round_consul.player_id, game_manager.role_name(round_consul.role)]
+			_round_transition_time_left = 2.5
+	if _round_transition_time_left > 0.0:
+		_round_transition_time_left = max(_round_transition_time_left - _delta, 0.0)
 	if round_label:
 		round_label.text = "Round: %d" % state.round_number
 	if influence_label:
@@ -71,6 +84,8 @@ func _process(_delta):
 		consul_label.text = "Consul: Player %d (%s) | Co-Consul: %s" % [consul.player_id, game_manager.role_name(consul.role), co_consul_text]
 	if player_purses_label:
 		player_purses_label.text = _build_player_purses_text(state)
+	if actor_prompt_label:
+		actor_prompt_label.text = _build_actor_prompt_text(state)
 	if phase_info_label:
 		phase_info_label.text = _build_phase_text(state)
 	_update_nominee_buttons(state)
@@ -223,6 +238,45 @@ func _build_player_purses_text(state) -> String:
 	for player in state.players:
 		parts.append("Player %d (%s): %d" % [player.player_id, game_manager.role_name(player.role), player.money])
 	return " | ".join(parts)
+
+func _build_actor_prompt_text(state) -> String:
+	var lines = []
+	if _round_transition_time_left > 0.0 and _round_transition_message != "":
+		lines.append(_round_transition_message)
+
+	var actor_text = "Current actor: "
+	match state.game_phase:
+		"election":
+			if state.election_nominee_index < 0:
+				actor_text += "Consul chooses a co-consul nominee"
+			elif not game_manager.are_election_votes_complete():
+				actor_text += "All players vote Yes/No"
+			else:
+				actor_text += "Resolve election"
+		"policy":
+			var stage = game_manager.get_policy_discard_stage()
+			if stage == "consul":
+				actor_text += "Consul discards one policy"
+			elif stage == "co_consul":
+				actor_text += "Co-Consul discards one policy"
+			else:
+				actor_text += "Resolve policy"
+		"spending":
+			if state.spending_stage == "input":
+				actor_text += "Player %d enters private spending" % state.spending_input_player_index
+			elif state.spending_stage == "handoff":
+				actor_text += "Pass to next player"
+			elif state.spending_stage == "resolved":
+				actor_text += "Resolve spending and continue"
+			else:
+				actor_text += "Spending"
+		"round_end":
+			actor_text += "Starting next round"
+		_:
+			actor_text += state.game_phase
+
+	lines.append(actor_text)
+	return "\n".join(lines)
 
 func _build_phase_text(state) -> String:
 	var lines = ["Phase: %s" % state.game_phase]

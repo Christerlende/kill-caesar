@@ -27,6 +27,10 @@ text = "Influence P:0 / L:0"
 [node name="ConsulLabel" type="Label" parent="GameUI/VBoxContainer" unique_id=1299466159]
 text = "Consul: none"
 
+[node name="ActorPromptLabel" type="Label" parent="GameUI/VBoxContainer"]
+text = "Current actor: -"
+autowrap_mode = 3
+
 [node name="NomineeButtonsContainer" type="HBoxContainer" parent="GameUI/VBoxContainer"]
 
 [node name="ElectionVotesContainer" type="VBoxContainer" parent="GameUI/VBoxContainer"]

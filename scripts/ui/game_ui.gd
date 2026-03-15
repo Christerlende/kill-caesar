@@ -74,7 +74,7 @@ func _process(_delta):
 	if round_label:
 		round_label.text = "Round: %d" % state.round_number
 	if influence_label:
-		influence_label.text = "Patrician Influence: %d | Plebian Influence: %d" % [state.influence_patrician, state.influence_plebian]
+		influence_label.text = "Patrician Influence: %d | Plebeian Influence: %d" % [state.influence_patrician, state.influence_plebian]
 	if consul_label:
 		var consul = state.players[state.current_consul_index]
 		var co_consul_text = "Not chosen yet"
@@ -317,7 +317,7 @@ func _build_phase_text(state) -> String:
 			lines.append("Preparing policy choices")
 
 	if state.policy_enacted != null:
-		var faction_name = "Patrician" if state.policy_enacted.faction == game_manager.Role.PATRICIAN else "Plebian"
+		var faction_name = "Patrician" if state.policy_enacted.faction == game_manager.Role.PATRICIAN else "Plebeian"
 		var discarded_str = ", ".join(state.policy_discarded_ids.map(func(id): return "Policy #%d" % id))
 		lines.append("")
 		lines.append("Policies discarded: %s" % discarded_str)
@@ -351,7 +351,7 @@ func _build_phase_text(state) -> String:
 			lines.append("PATRICIANS WIN!")
 		elif state.influence_plebian >= 5:
 			lines.append("")
-			lines.append("PLEBIANS WIN!")
+			lines.append("PLEBEIANS WIN!")
 
 	return "\n".join(lines)
 

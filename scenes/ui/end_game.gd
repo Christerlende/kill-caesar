@@ -9,7 +9,7 @@ const GameManager = preload("res://scripts/game/game_manager.gd")
 
 func _ready() -> void:
 	winner_label.text = "%s Win!" % GameManager.last_winner_text
-	summary_label.text = "Round: %d\nPatrician Influence: %d\nPlebian Influence: %d" % [
+	summary_label.text = "Round: %d\nPatrician Influence: %d\nPlebeian Influence: %d" % [
 		GameManager.last_round_number,
 		GameManager.last_patrician_influence,
 		GameManager.last_plebian_influence

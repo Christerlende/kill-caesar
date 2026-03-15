@@ -25,7 +25,7 @@ func role_name(role: int) -> String:
 		Role.PATRICIAN:
 			return "Patrician"
 		Role.PLEBIAN:
-			return "Plebian"
+			return "Plebeian"
 		_:
 			return "Unknown"
 
@@ -41,6 +41,10 @@ func _alignment_score(role: int, beneficiary: int) -> int:
 	if role == Role.PLEBIAN and beneficiary == Role.PATRICIAN:
 		return -2
 	return 0
+
+func _required_yes_votes() -> int:
+	# Simple majority: floor(n/2) + 1
+	return int(floor(state.players.size() / 2.0)) + 1
 
 func _pick_ai_nominee() -> int:
 	var candidates = get_nominee_candidates()
@@ -99,7 +103,7 @@ func auto_fill_ai_election_votes() -> void:
 		for j in range(player_id + 1, state.players.size()):
 			if state.election_vote_inputs[j] == -1 and state.players[j].is_ai:
 				remaining_ai_unset += 1
-		var needed_yes = 5 - yes_count
+		var needed_yes = _required_yes_votes() - yes_count
 		var must_vote_yes = needed_yes > 0 and needed_yes >= (remaining_ai_unset + 1)
 		var vote_yes = must_vote_yes or _should_ai_vote_yes(player_id, state.election_nominee_index)
 		set_election_vote(player_id, vote_yes)
@@ -173,7 +177,7 @@ func create_players():
 	assign_roles()
 
 func assign_roles():
-	# simple distribution: 1 Caesar, 2 Patricians, 3 Plebians
+	# simple distribution: 1 Caesar, 2 Patricians, 3 Plebeians
 	var roles = [Role.CAESAR] + [Role.PATRICIAN, Role.PATRICIAN] + [Role.PLEBIAN, Role.PLEBIAN, Role.PLEBIAN]
 	roles.shuffle()
 	for i in range(state.players.size()):
@@ -198,6 +202,8 @@ func start_round():
 	state.election_votes_yes.clear()
 	state.election_votes_no.clear()
 	state.election_passed = false
+	# Intentionally keep ineligible_co_consul_indices across rounds.
+	# It is only refreshed after a successful election.
 	state.election_vote_inputs.clear()
 	for i in range(state.players.size()):
 		state.election_vote_inputs.append(-1)
@@ -302,10 +308,12 @@ func conduct_election() -> bool:
 	var yes = state.election_votes_yes.size()
 	var no = state.election_votes_no.size()
 	print("Votes - yes: %d no: %d" % [yes, no])
-	if yes > 3:
+	if yes >= _required_yes_votes():
 		state.election_passed = true
 		print("Election passed, player %d is co-consul" % nominee)
 		state.current_co_consul_index = nominee
+		# Update blocked pair only on successful election.
+		# Failed elections keep the previous successful pair blocked.
 		state.ineligible_co_consul_indices = [state.current_consul_index, nominee]
 		# update runtime flags
 		for p in state.players:
@@ -483,12 +491,12 @@ func check_win_condition() -> void:
 		get_tree().change_scene_to_file("res://scenes/ui/end_game.tscn")
 	elif state.influence_plebian >= influence_to_win:
 		state.game_phase = "game_over"
-		last_winner_text = "Plebians"
+		last_winner_text = "Plebeians"
 		last_patrician_influence = state.influence_patrician
 		last_plebian_influence = state.influence_plebian
 		last_round_number = state.round_number
 		_game_over_handled = true
-		print("Plebians win! Influence reached %d" % state.influence_plebian)
+		print("Plebeians win! Influence reached %d" % state.influence_plebian)
 		get_tree().change_scene_to_file("res://scenes/ui/end_game.tscn")
 
 func apply_benefit(faction: int, amount: int) -> void:

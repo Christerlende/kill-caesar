@@ -200,7 +200,10 @@ func _process(_delta):
 		actor_prompt_label.text = _build_actor_prompt_text(state)
 	# Toggle election panel vs legacy debug controls
 	var in_election = state.game_phase == "election"
-	var election_panel_active = in_election or (election_panel and election_panel.is_showing_result() and state.game_phase != "policy")
+	var election_transition_active = false
+	if election_panel:
+		election_transition_active = election_panel.is_showing_result()
+	var election_panel_active = in_election or election_transition_active
 	if election_panel:
 		election_panel.visible = election_panel_active
 		if not election_panel_active:
@@ -216,7 +219,7 @@ func _process(_delta):
 		if election_votes_container:
 			election_votes_container.visible = true
 	# Toggle policy panel vs legacy debug controls
-	var in_policy = state.game_phase == "policy" and state.policy_enacted == null
+	var in_policy = state.game_phase == "policy" and state.policy_enacted == null and not election_transition_active
 	if policy_panel:
 		policy_panel.visible = in_policy
 		if not in_policy:

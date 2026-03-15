@@ -32,6 +32,10 @@ var _last_nominee_index: int = -99
 var _last_vote_signature: String = ""
 var _last_phase: String = ""
 var _showing_result: bool = false
+var _result_auto_advance_time_left: float = 0.0
+var _auto_resolve_queued: bool = false
+
+const RESULT_TRANSITION_SECONDS: float = 20.0
 
 func _ready():
 	var margin = MarginContainer.new()
@@ -97,6 +101,29 @@ func _ready():
 	_continue_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_continue_button.visible = false
 	_continue_button.pressed.connect(_on_continue_pressed)
+	_continue_button.add_theme_color_override("font_color", COLOR_CREAM)
+	_continue_button.add_theme_color_override("font_focus_color", COLOR_CREAM)
+	_continue_button.add_theme_color_override("font_hover_color", COLOR_CREAM)
+	_continue_button.add_theme_color_override("font_pressed_color", COLOR_CREAM)
+	var continue_style = StyleBoxFlat.new()
+	continue_style.bg_color = Color(0.14, 0.62, 0.18, 0.95)
+	continue_style.border_width_left = 1
+	continue_style.border_width_top = 1
+	continue_style.border_width_right = 1
+	continue_style.border_width_bottom = 1
+	continue_style.border_color = Color(0.78, 0.9, 0.78, 0.7)
+	continue_style.corner_radius_top_left = 6
+	continue_style.corner_radius_top_right = 6
+	continue_style.corner_radius_bottom_left = 6
+	continue_style.corner_radius_bottom_right = 6
+	continue_style.content_margin_left = 16
+	continue_style.content_margin_right = 16
+	continue_style.content_margin_top = 8
+	continue_style.content_margin_bottom = 8
+	_continue_button.add_theme_stylebox_override("normal", continue_style)
+	_continue_button.add_theme_stylebox_override("focus", continue_style)
+	_continue_button.add_theme_stylebox_override("pressed", continue_style)
+	_continue_button.add_theme_stylebox_override("hover", continue_style)
 	root_vbox.add_child(_continue_button)
 
 	_proceed_button = Button.new()
@@ -119,8 +146,11 @@ func _process(_delta):
 	if state.game_phase != "election" and not _showing_result:
 		return
 	if _showing_result:
-		# Result is frozen on screen; just keep proceed button visible
-		_proceed_button.visible = true
+		_result_auto_advance_time_left = max(_result_auto_advance_time_left - _delta, 0.0)
+		_update_continue_button_text()
+		_update_result(state)
+		if _result_auto_advance_time_left <= 0.0:
+			_advance_after_result()
 		return
 	_update_consul_info(state)
 	_update_nominee(state)
@@ -277,7 +307,10 @@ func _update_voting(state) -> void:
 
 		_voter_grid.add_child(card)
 
-	_continue_button.visible = all_voted and not election_resolved
+	_continue_button.visible = _showing_result
+	if all_voted and not election_resolved and not _auto_resolve_queued and not _showing_result:
+		_auto_resolve_queued = true
+		call_deferred("_resolve_election_and_show_result")
 
 func _update_result(state) -> void:
 	var election_resolved = state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0
@@ -287,10 +320,10 @@ func _update_result(state) -> void:
 
 	_result_section.visible = true
 	if state.election_passed:
-		_result_label.text = "THE SENATE HAS SPOKEN — VOTE PASSED"
+		_result_label.text = "Election successful"
 		_result_label.add_theme_color_override("font_color", COLOR_GREEN)
 	else:
-		_result_label.text = "THE SENATE HAS SPOKEN — VOTE FAILED"
+		_result_label.text = "Election unsuccessful"
 		_result_label.add_theme_color_override("font_color", COLOR_RED)
 
 	var yes_names = []
@@ -301,13 +334,25 @@ func _update_result(state) -> void:
 		no_names.append("Player %d" % pid)
 	var yes_str = ", ".join(yes_names) if yes_names.size() > 0 else "none"
 	var no_str = ", ".join(no_names) if no_names.size() > 0 else "none"
-	_result_breakdown.text = "Yea: %s\nNay: %s" % [yes_str, no_str]
+	var transition_text = _build_transition_text(state)
+	var details = "%s\n\nYea: %s\nNay: %s" % [transition_text, yes_str, no_str]
+	_result_breakdown.text = details
+
+func _build_transition_text(state) -> String:
+	var consul_id = state.current_consul_index
+	var nominee_id = state.election_nominee_index
+	if state.election_passed:
+		var co_consul_id = state.current_co_consul_index if state.current_co_consul_index >= 0 else nominee_id
+		return "Player %d and Player %d step into power as consul and co-consul." % [consul_id, co_consul_id]
+	return "Player %d and Player %d do not gain power. The senate rejects their rise this round." % [consul_id, nominee_id]
 
 func reset_panel() -> void:
 	_last_nominee_index = -99
 	_last_vote_signature = ""
 	_last_phase = ""
 	_showing_result = false
+	_result_auto_advance_time_left = 0.0
+	_auto_resolve_queued = false
 	_voting_section.visible = false
 	_result_section.visible = false
 	_continue_button.visible = false
@@ -326,22 +371,56 @@ func _on_vote_toggled(is_on: bool, player_id: int, is_yes: bool) -> void:
 		game_manager.set_election_vote(player_id, is_yes)
 
 func _on_continue_pressed() -> void:
-	# Resolve the election, then freeze the panel to show the result
+	if _showing_result:
+		_advance_after_result()
+		return
+	_resolve_election_and_show_result()
+
+func _on_proceed_pressed() -> void:
+	_advance_after_result()
+
+func _advance_after_result() -> void:
+	if not _showing_result:
+		return
+	_showing_result = false
+	_result_auto_advance_time_left = 0.0
+	_continue_button.visible = false
+	_proceed_button.visible = false
+	if game_manager and game_manager.state and game_manager.state.game_phase == "round_end":
+		game_manager.progress()
+
+func _resolve_election_and_show_result() -> void:
+	_auto_resolve_queued = false
+	if not game_manager or not game_manager.state:
+		return
+	var state = game_manager.state
+	if state.game_phase != "election":
+		return
+	var election_resolved = state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0
+	if election_resolved:
+		return
+	if not game_manager.are_election_votes_complete():
+		return
+	# Resolve the election, then freeze the panel to show the result.
 	game_manager.progress()
 	_showing_result = true
-	_continue_button.visible = false
-	# Force one final update to display the result banner
-	var state = game_manager.state
+	_result_auto_advance_time_left = RESULT_TRANSITION_SECONDS
+	_continue_button.visible = true
+	_update_continue_button_text()
+	_proceed_button.visible = false
+	state = game_manager.state
 	if state:
 		_last_vote_signature = ""
 		_update_voting(state)
 		_update_result(state)
 
-func _on_proceed_pressed() -> void:
-	_showing_result = false
-	_proceed_button.visible = false
-	if game_manager and game_manager.state and game_manager.state.game_phase == "round_end":
-		game_manager.progress()
+func _update_continue_button_text() -> void:
+	if not _continue_button:
+		return
+	if not _showing_result:
+		_continue_button.text = "Continue"
+		return
+	_continue_button.text = "Continue (%d)" % int(ceil(_result_auto_advance_time_left))
 
 # --- helpers ---
 

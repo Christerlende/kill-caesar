@@ -340,6 +340,8 @@ func _on_continue_pressed() -> void:
 func _on_proceed_pressed() -> void:
 	_showing_result = false
 	_proceed_button.visible = false
+	if game_manager and game_manager.state and game_manager.state.game_phase == "round_end":
+		game_manager.progress()
 
 # --- helpers ---
 

@@ -232,7 +232,7 @@ func _build_policy_card(policy, is_greyed: bool, is_clickable: bool) -> PanelCon
 	# Click area (invisible button overlay)
 	if is_clickable and not is_greyed:
 		var click_btn = Button.new()
-		click_btn.text = "Select"
+		click_btn.text = "Remove"
 		click_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 		click_btn.pressed.connect(_on_card_clicked.bind(policy.id))
 		col.add_child(click_btn)
@@ -318,6 +318,8 @@ func _on_confirm_pressed() -> void:
 		game_manager.discard_policy_by_id(_selected_policy_id)
 		_selected_policy_id = -1
 		_last_ui_key = ""  # force rebuild
+		if game_manager and game_manager.state and game_manager.state.game_phase == "policy" and game_manager.state.policy_enacted != null:
+			game_manager.progress()
 
 func _on_cancel_pressed() -> void:
 	_selected_policy_id = -1

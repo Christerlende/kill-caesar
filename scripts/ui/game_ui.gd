@@ -10,17 +10,24 @@ var election_votes_container: VBoxContainer
 var policy_discard_buttons_container: HBoxContainer
 var spending_controls_container: VBoxContainer
 var player_purses_label: Label
+var gold_gain_label: Label
 var phase_info_label: Label
 var next_button: Button
+var patrician_influence_bar: ProgressBar
+var plebeian_influence_bar: ProgressBar
 var _nominee_ui_key: String = ""
 var _vote_ui_key: String = ""
 var _policy_ui_key: String = ""
 var _spending_ui_key: String = ""
+var _spend_selected_option: String = "A"
+var _spend_amount_draft: int = 0
+var _spend_player_id_draft: int = -1
 var _last_seen_round: int = -1
 var _round_transition_message: String = ""
 var _round_transition_time_left: float = 0.0
 var election_panel = null
 var policy_panel = null
+var spending_panel = null
 
 func _ready():
 	# determine game manager reference
@@ -35,19 +42,53 @@ func _ready():
 			game_manager = scene
 	print("game_manager is", game_manager, "class", game_manager.get_class())
 
-	# grab UI elements from container
-	round_label = $VBoxContainer.get_node_or_null("RoundLabel")
-	influence_label = $VBoxContainer.get_node_or_null("InfluenceLabel")
-	consul_label = $VBoxContainer.get_node_or_null("ConsulLabel")
-	actor_prompt_label = $VBoxContainer.get_node_or_null("ActorPromptLabel")
+	# grab persistent HUD elements first
+	round_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/RoundLabel")
+	influence_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/InfluenceLabel")
+	consul_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/ConsulLabel")
+	actor_prompt_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/ActorPromptLabel")
+	patrician_influence_bar = get_node_or_null("TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianInfluenceBar")
+	plebeian_influence_bar = get_node_or_null("TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianInfluenceBar")
+
+	# fallback to legacy nodes if HUD nodes are unavailable
+	if not round_label:
+		round_label = $VBoxContainer.get_node_or_null("RoundLabel")
+	if not influence_label:
+		influence_label = $VBoxContainer.get_node_or_null("InfluenceLabel")
+	if not consul_label:
+		consul_label = $VBoxContainer.get_node_or_null("ConsulLabel")
+	if not actor_prompt_label:
+		actor_prompt_label = $VBoxContainer.get_node_or_null("ActorPromptLabel")
+
+	# grab legacy/main control containers
 	nominee_buttons_container = $VBoxContainer.get_node_or_null("NomineeButtonsContainer")
 	election_votes_container = $VBoxContainer.get_node_or_null("ElectionVotesContainer")
 	policy_discard_buttons_container = $VBoxContainer.get_node_or_null("PolicyDiscardButtonsContainer")
 	spending_controls_container = $VBoxContainer.get_node_or_null("SpendingControlsContainer")
-	player_purses_label = $VBoxContainer.get_node_or_null("PlayerPursesLabel")
+	player_purses_label = get_node_or_null("HiddenInfoPanel/HiddenInfoMargin/HiddenInfoRow/HiddenInfoLabel")
+	gold_gain_label = get_node_or_null("HiddenInfoPanel/HiddenInfoMargin/HiddenInfoRow/GoldGainLabel")
+	if not player_purses_label:
+		player_purses_label = $VBoxContainer.get_node_or_null("PlayerPursesLabel")
 	phase_info_label = $VBoxContainer.get_node_or_null("PhaseInfoLabel")
 	next_button = $VBoxContainer.get_node_or_null("NextButton")
 	print("labels:", round_label, influence_label, consul_label, actor_prompt_label, nominee_buttons_container, election_votes_container, policy_discard_buttons_container, spending_controls_container, player_purses_label, phase_info_label, "button", next_button)
+
+	# hide legacy duplicated labels when persistent HUD is available
+	var legacy_round = $VBoxContainer.get_node_or_null("RoundLabel")
+	if legacy_round and legacy_round != round_label:
+		legacy_round.visible = false
+	var legacy_influence = $VBoxContainer.get_node_or_null("InfluenceLabel")
+	if legacy_influence and legacy_influence != influence_label:
+		legacy_influence.visible = false
+	var legacy_consul = $VBoxContainer.get_node_or_null("ConsulLabel")
+	if legacy_consul and legacy_consul != consul_label:
+		legacy_consul.visible = false
+	var legacy_actor = $VBoxContainer.get_node_or_null("ActorPromptLabel")
+	if legacy_actor and legacy_actor != actor_prompt_label:
+		legacy_actor.visible = false
+	var legacy_hidden = $VBoxContainer.get_node_or_null("PlayerPursesLabel")
+	if legacy_hidden and legacy_hidden != player_purses_label:
+		legacy_hidden.visible = false
 
 	# debug: list children
 	print("GameUI children:", get_children())
@@ -66,11 +107,58 @@ func _ready():
 		policy_panel.game_manager = game_manager
 		policy_panel.visible = false
 
+	# connect spending panel
+	spending_panel = get_node_or_null("SpendingPanel")
+	if spending_panel:
+		spending_panel.game_manager = game_manager
+		spending_panel.visible = false
+
 	# connect button if available
 	if next_button:
 		next_button.connect("pressed", Callable(self, "_on_NextButton_pressed"))
+		next_button.visible = false
 	else:
 		print("next_button is null")
+	if phase_info_label:
+		phase_info_label.visible = false
+
+	_apply_influence_bar_styles()
+
+func _apply_influence_bar_styles() -> void:
+	if not patrician_influence_bar or not plebeian_influence_bar:
+		return
+
+	var bg_style = StyleBoxFlat.new()
+	bg_style.bg_color = Color(0.12, 0.08, 0.06, 0.95)
+	bg_style.border_width_left = 1
+	bg_style.border_width_top = 1
+	bg_style.border_width_right = 1
+	bg_style.border_width_bottom = 1
+	bg_style.border_color = Color(0.7, 0.55, 0.2, 0.7)
+	bg_style.corner_radius_top_left = 6
+	bg_style.corner_radius_top_right = 6
+	bg_style.corner_radius_bottom_left = 6
+	bg_style.corner_radius_bottom_right = 6
+
+	var patrician_fill = StyleBoxFlat.new()
+	patrician_fill.bg_color = Color(0.76, 0.16, 0.12, 0.95)
+	patrician_fill.corner_radius_top_left = 5
+	patrician_fill.corner_radius_top_right = 5
+	patrician_fill.corner_radius_bottom_left = 5
+	patrician_fill.corner_radius_bottom_right = 5
+
+	var plebeian_fill = StyleBoxFlat.new()
+	plebeian_fill.bg_color = Color(0.2, 0.36, 0.82, 0.95)
+	plebeian_fill.corner_radius_top_left = 5
+	plebeian_fill.corner_radius_top_right = 5
+	plebeian_fill.corner_radius_bottom_left = 5
+	plebeian_fill.corner_radius_bottom_right = 5
+
+	patrician_influence_bar.add_theme_stylebox_override("background", bg_style)
+	plebeian_influence_bar.add_theme_stylebox_override("background", bg_style)
+	patrician_influence_bar.add_theme_stylebox_override("fill", patrician_fill)
+	plebeian_influence_bar.add_theme_stylebox_override("fill", plebeian_fill)
+
 func _process(_delta):
 	if not game_manager:
 		return
@@ -89,6 +177,12 @@ func _process(_delta):
 		round_label.text = "Round: %d" % state.round_number
 	if influence_label:
 		influence_label.text = "Patrician Influence: %d | Plebeian Influence: %d" % [state.influence_patrician, state.influence_plebian]
+	if patrician_influence_bar and plebeian_influence_bar:
+		var influence_target = max(1, game_manager.influence_to_win)
+		patrician_influence_bar.max_value = influence_target
+		plebeian_influence_bar.max_value = influence_target
+		patrician_influence_bar.value = state.influence_patrician
+		plebeian_influence_bar.value = state.influence_plebian
 	if consul_label:
 		var consul = state.players[state.current_consul_index]
 		var co_consul_text = "Not chosen yet"
@@ -98,13 +192,15 @@ func _process(_delta):
 		consul_label.text = "Consul: Player %d (%s) | Co-Consul: %s" % [consul.player_id, game_manager.role_name(consul.role), co_consul_text]
 	if player_purses_label:
 		player_purses_label.text = _build_player_purses_text(state)
+	if gold_gain_label and state.players.size() > 0:
+		var viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
+		var viewer_role = state.players[viewer_index].role
+		gold_gain_label.text = "Gold gain each round: %d" % _gold_gain_for_role(viewer_role)
 	if actor_prompt_label:
 		actor_prompt_label.text = _build_actor_prompt_text(state)
-	if phase_info_label:
-		phase_info_label.text = _build_phase_text(state)
 	# Toggle election panel vs legacy debug controls
 	var in_election = state.game_phase == "election"
-	var election_panel_active = in_election or (election_panel and election_panel.is_showing_result())
+	var election_panel_active = in_election or (election_panel and election_panel.is_showing_result() and state.game_phase != "policy")
 	if election_panel:
 		election_panel.visible = election_panel_active
 		if not election_panel_active:
@@ -131,12 +227,20 @@ func _process(_delta):
 	else:
 		if policy_discard_buttons_container:
 			policy_discard_buttons_container.visible = true
+
+	# Toggle spending panel vs legacy spending controls
+	var in_spending = state.game_phase == "spending"
+	if spending_panel:
+		spending_panel.visible = in_spending
+		if not in_spending:
+			spending_panel.reset_panel()
+	if spending_controls_container:
+		spending_controls_container.visible = not in_spending
+
 	_update_nominee_buttons(state)
 	_update_election_vote_buttons(state)
 	_update_policy_discard_buttons(state)
 	_update_spending_controls(state)
-	if next_button:
-		next_button.disabled = (state.game_phase == "election" and (state.election_nominee_index < 0 or not game_manager.are_election_votes_complete())) or (state.game_phase == "policy" and state.policy_enacted == null) or (state.game_phase == "spending" and state.spending_stage != "resolved")
 
 func _update_nominee_buttons(state) -> void:
 	if not nominee_buttons_container:
@@ -225,7 +329,7 @@ func _int_list_signature(values: Array) -> String:
 func _update_spending_controls(state) -> void:
 	if not spending_controls_container:
 		return
-	var ui_key = "%s|%s|%d" % [state.game_phase, state.spending_stage, state.spending_input_player_index]
+	var ui_key = "%s|%s|%d|%s|%d" % [state.game_phase, state.spending_stage, state.spending_input_player_index, _spend_selected_option, _spend_amount_draft]
 	if ui_key == _spending_ui_key:
 		return
 	_spending_ui_key = ui_key
@@ -236,33 +340,62 @@ func _update_spending_controls(state) -> void:
 	if state.spending_stage == "input":
 		var player_id = game_manager.get_current_spending_player_id()
 		var money = game_manager.get_current_spending_player_money()
+		if _spend_player_id_draft != player_id:
+			_spend_player_id_draft = player_id
+			_spend_selected_option = "A"
+			_spend_amount_draft = 0
 		var title = Label.new()
 		title.text = "Private spending input: Player %d" % player_id
 		spending_controls_container.add_child(title)
 		var hint = Label.new()
-		hint.text = "Choose one option and how much to spend. Unspent gold stays in your purse."
+		hint.text = "Choose one option and how much gold to spend. Unspent gold stays in your purse."
 		spending_controls_container.add_child(hint)
-		var option_a_label = Label.new()
-		option_a_label.text = "Spend on Option A"
-		spending_controls_container.add_child(option_a_label)
-		var option_a_row = HBoxContainer.new()
-		for amount_a in range(money + 1):
-			var a_button = Button.new()
-			a_button.text = "A: %d" % amount_a
-			a_button.pressed.connect(Callable(self, "_on_spending_choice_pressed").bind("A", amount_a))
-			option_a_row.add_child(a_button)
-		spending_controls_container.add_child(option_a_row)
 
-		var option_b_label = Label.new()
-		option_b_label.text = "Spend on Option B"
-		spending_controls_container.add_child(option_b_label)
-		var option_b_row = HBoxContainer.new()
-		for amount_b in range(money + 1):
-			var b_button = Button.new()
-			b_button.text = "B: %d" % amount_b
-			b_button.pressed.connect(Callable(self, "_on_spending_choice_pressed").bind("B", amount_b))
-			option_b_row.add_child(b_button)
-		spending_controls_container.add_child(option_b_row)
+		var option_row = HBoxContainer.new()
+		option_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		option_row.add_theme_constant_override("separation", 10)
+		var a_btn = Button.new()
+		a_btn.text = "Option A"
+		a_btn.disabled = _spend_selected_option == "A"
+		a_btn.pressed.connect(Callable(self, "_on_spending_option_selected").bind("A"))
+		option_row.add_child(a_btn)
+		var b_btn = Button.new()
+		b_btn.text = "Option B"
+		b_btn.disabled = _spend_selected_option == "B"
+		b_btn.pressed.connect(Callable(self, "_on_spending_option_selected").bind("B"))
+		option_row.add_child(b_btn)
+		spending_controls_container.add_child(option_row)
+
+		var spend_label = Label.new()
+		spend_label.text = "Spend gold: %d" % _spend_amount_draft
+		spend_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		spending_controls_container.add_child(spend_label)
+
+		var adjust_row = HBoxContainer.new()
+		adjust_row.alignment = BoxContainer.ALIGNMENT_CENTER
+		adjust_row.add_theme_constant_override("separation", 14)
+		var minus_btn = Button.new()
+		minus_btn.text = "-"
+		minus_btn.disabled = _spend_amount_draft <= 0
+		minus_btn.pressed.connect(Callable(self, "_on_spending_minus_pressed").bind(money))
+		adjust_row.add_child(minus_btn)
+		var plus_btn = Button.new()
+		plus_btn.text = "+"
+		plus_btn.disabled = _spend_amount_draft >= money
+		plus_btn.pressed.connect(Callable(self, "_on_spending_plus_pressed").bind(money))
+		adjust_row.add_child(plus_btn)
+		spending_controls_container.add_child(adjust_row)
+
+		var purse_preview = Label.new()
+		purse_preview.text = "Purse after payment: %d" % max(0, money - _spend_amount_draft)
+		purse_preview.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		spending_controls_container.add_child(purse_preview)
+
+		var commit_btn = Button.new()
+		commit_btn.text = "Render Tribute"
+		commit_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		commit_btn.pressed.connect(Callable(self, "_on_spending_pay_pressed"))
+		spending_controls_container.add_child(commit_btn)
 	elif state.spending_stage == "handoff":
 		var handoff = Label.new()
 		handoff.text = "Private entry saved. Pass to next player."
@@ -275,12 +408,60 @@ func _update_spending_controls(state) -> void:
 		var done = Label.new()
 		done.text = "All private spending captured. Totals are now public."
 		spending_controls_container.add_child(done)
+		var continue_button = Button.new()
+		continue_button.text = "Continue"
+		continue_button.pressed.connect(Callable(self, "_on_spending_continue_pressed"))
+		spending_controls_container.add_child(continue_button)
 
 func _build_player_purses_text(state) -> String:
-	var parts = []
-	for player in state.players:
-		parts.append("Player %d (%s): %d" % [player.player_id, game_manager.role_name(player.role), player.money])
-	return " | ".join(parts)
+	if state.players.size() == 0:
+		return "No players"
+
+	var viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
+	if state.game_phase == "spending" and state.spending_stage == "input":
+		viewer_index = clamp(state.spending_input_player_index, 0, state.players.size() - 1)
+	var viewer = state.players[viewer_index]
+	var viewer_role = viewer.role
+	var own_gold = _visible_gold_for_player(state, viewer_index)
+
+	if viewer_role == game_manager.Role.CAESAR:
+		var patricians = []
+		var plebeians = []
+		for player in state.players:
+			if player.player_id == viewer.player_id:
+				continue
+			if player.role == game_manager.Role.PATRICIAN:
+				patricians.append("Player %d" % player.player_id)
+			elif player.role == game_manager.Role.PLEBIAN:
+				plebeians.append("Player %d" % player.player_id)
+		var patrician_text = " & ".join(patricians) if patricians.size() > 0 else "none"
+		var plebeian_text = ", ".join(plebeians) if plebeians.size() > 0 else "none"
+		return "Player %d (Caesar) | Own gold: %d | Patricians: %s | Plebeians: %s" % [viewer.player_id, own_gold, patrician_text, plebeian_text]
+
+	if viewer_role == game_manager.Role.PATRICIAN:
+		var other_patrician = "Unknown"
+		for player in state.players:
+			if player.player_id != viewer.player_id and player.role == game_manager.Role.PATRICIAN:
+				other_patrician = "Player %d" % player.player_id
+				break
+		return "Player %d (Patrician) | Own gold: %d | Allied Patrician: %s" % [viewer.player_id, own_gold, other_patrician]
+
+	return "Player %d (Plebeian) | Own gold: %d" % [viewer.player_id, own_gold]
+
+func _visible_gold_for_player(state, player_index: int) -> int:
+	var current = state.players[player_index].money
+	if spending_panel and spending_panel.is_preview_active() and spending_panel.preview_player_id() == player_index:
+		var preview = spending_panel.preview_remaining_gold()
+		if preview >= 0:
+			return preview
+	return current
+
+func _gold_gain_for_role(role: int) -> int:
+	if role == game_manager.Role.CAESAR:
+		return 8
+	if role == game_manager.Role.PATRICIAN:
+		return 6
+	return 4
 
 func _build_actor_prompt_text(state) -> String:
 	var lines = []
@@ -435,3 +616,24 @@ func _on_spending_choice_pressed(option_key: String, spend_amount: int) -> void:
 
 func _on_spending_ready_next_pressed() -> void:
 	game_manager.advance_spending_turn()
+
+func _on_spending_option_selected(option_key: String) -> void:
+	_spend_selected_option = option_key
+	_spending_ui_key = ""
+
+func _on_spending_minus_pressed(max_money: int) -> void:
+	_spend_amount_draft = clamp(_spend_amount_draft - 1, 0, max_money)
+	_spending_ui_key = ""
+
+func _on_spending_plus_pressed(max_money: int) -> void:
+	_spend_amount_draft = clamp(_spend_amount_draft + 1, 0, max_money)
+	_spending_ui_key = ""
+
+func _on_spending_pay_pressed() -> void:
+	game_manager.set_spending_allocation(_spend_selected_option, _spend_amount_draft)
+	_spending_ui_key = ""
+
+func _on_spending_continue_pressed() -> void:
+	game_manager.progress()
+	if game_manager.state.game_phase == "round_end":
+		game_manager.progress()

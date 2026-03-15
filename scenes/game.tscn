@@ -5,6 +5,7 @@
 [ext_resource type="Script" path="res://scripts/ui/election_panel.gd" id="3"]
 [ext_resource type="Theme" uid="uid://roman_theme_001" path="res://scenes/ui/themes/roman_theme.tres" id="4"]
 [ext_resource type="Script" path="res://scripts/ui/policy_panel.gd" id="5"]
+[ext_resource type="Script" path="res://scripts/ui/spending_panel.gd" id="6"]
 
 [node name="Game" type="Node" unique_id=1989461786]
 script = ExtResource("1")
@@ -21,6 +22,123 @@ anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 script = ExtResource("2")
+
+[node name="TopHudPanel" type="PanelContainer" parent="GameUI"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 18.0
+offset_top = 14.0
+offset_right = -18.0
+offset_bottom = 198.0
+grow_horizontal = 2
+theme = ExtResource("4")
+
+[node name="HudMargin" type="MarginContainer" parent="GameUI/TopHudPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 14
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 14
+theme_override_constants/margin_bottom = 12
+
+[node name="HudVBox" type="VBoxContainer" parent="GameUI/TopHudPanel/HudMargin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HudTopRow" type="HBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="RoundLabel" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox/HudTopRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Round: 0"
+
+[node name="ConsulLabel" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox/HudTopRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Consul: none"
+
+[node name="InfluenceLabel" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox/HudTopRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+horizontal_alignment = 2
+text = "Influence P:0 / L:0"
+
+[node name="InfluenceBarsRow" type="HBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="PatricianBarBox" type="VBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PatricianBarLabel" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox"]
+layout_mode = 2
+text = "Patrician Influence"
+
+[node name="PatricianInfluenceBar" type="ProgressBar" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+max_value = 5.0
+show_percentage = false
+value = 0.0
+
+[node name="PlebeianBarBox" type="VBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PlebeianBarLabel" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox"]
+layout_mode = 2
+text = "Plebeian Influence"
+
+[node name="PlebeianInfluenceBar" type="ProgressBar" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox"]
+custom_minimum_size = Vector2(0, 26)
+layout_mode = 2
+max_value = 5.0
+show_percentage = false
+value = 0.0
+
+[node name="ActorPromptLabel" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox"]
+layout_mode = 2
+text = "Current actor: -"
+autowrap_mode = 3
+
+[node name="HiddenInfoPanel" type="PanelContainer" parent="GameUI"]
+layout_mode = 1
+anchors_preset = 14
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 18.0
+offset_top = -84.0
+offset_right = -18.0
+offset_bottom = -14.0
+grow_horizontal = 2
+grow_vertical = 0
+theme = ExtResource("4")
+
+[node name="HiddenInfoMargin" type="MarginContainer" parent="GameUI/HiddenInfoPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="HiddenInfoRow" type="HBoxContainer" parent="GameUI/HiddenInfoPanel/HiddenInfoMargin"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="HiddenInfoLabel" type="Label" parent="GameUI/HiddenInfoPanel/HiddenInfoMargin/HiddenInfoRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Hidden Info: Player 0 (Role) - 0 gold"
+autowrap_mode = 3
+
+[node name="GoldGainLabel" type="Label" parent="GameUI/HiddenInfoPanel/HiddenInfoMargin/HiddenInfoRow"]
+layout_mode = 2
+horizontal_alignment = 2
+text = "Gold gain each round: 0"
 
 [node name="VBoxContainer" type="VBoxContainer" parent="GameUI" unique_id=1680348360]
 anchors_preset = 15
@@ -71,9 +189,9 @@ anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
 offset_left = -400.0
-offset_top = -275.0
+offset_top = -240.0
 offset_right = 400.0
-offset_bottom = 275.0
+offset_bottom = 310.0
 grow_horizontal = 2
 grow_vertical = 2
 custom_minimum_size = Vector2(800, 550)
@@ -87,12 +205,29 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -440.0
-offset_top = -250.0
-offset_right = 440.0
-offset_bottom = 250.0
+offset_left = -400.0
+offset_top = -240.0
+offset_right = 400.0
+offset_bottom = 310.0
 grow_horizontal = 2
 grow_vertical = 2
-custom_minimum_size = Vector2(880, 500)
+custom_minimum_size = Vector2(800, 550)
 theme = ExtResource("4")
 script = ExtResource("5")
+
+[node name="SpendingPanel" type="PanelContainer" parent="GameUI"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -400.0
+offset_top = -240.0
+offset_right = 400.0
+offset_bottom = 310.0
+grow_horizontal = 2
+grow_vertical = 2
+custom_minimum_size = Vector2(800, 550)
+theme = ExtResource("4")
+script = ExtResource("6")

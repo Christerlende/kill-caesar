@@ -132,7 +132,7 @@ theme_override_colors/font_color = Color(0.95, 0.85, 0.45, 1)
 
 [node name="RulesBody" type="Label" parent="RulesPopup/PopupMargin/PopupVBox"]
 layout_mode = 2
-text = "1. The current Consul nominates a Co-Consul.\n2. Players vote yes or no on the election.\n3. If the election passes, three policy IDs are drawn. The Consul discards one, then the Co-Consul discards one.\n4. The final policy is enacted and grants influence to Patricians or Plebians.\n5. Players secretly spend gold on one of the two public policy options.\n6. The option with the higher total wins. First faction to 5 influence wins."
+text = "1. The current Consul nominates a Co-Consul.\n2. Players vote yes or no on the election.\n3. If the election passes, three policy IDs are drawn. The Consul discards one, then the Co-Consul discards one.\n4. The final policy is enacted and grants influence to Patricians or Plebeians.\n5. Players secretly spend gold on one of the two public policy options.\n6. The option with the higher total wins. First faction to 5 influence wins."
 autowrap_mode = 3
 theme_override_colors/font_color = Color(0.88, 0.82, 0.75, 1)
 

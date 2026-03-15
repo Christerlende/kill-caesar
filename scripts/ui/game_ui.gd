@@ -19,6 +19,8 @@ var _spending_ui_key: String = ""
 var _last_seen_round: int = -1
 var _round_transition_message: String = ""
 var _round_transition_time_left: float = 0.0
+var election_panel = null
+var policy_panel = null
 
 func _ready():
 	# determine game manager reference
@@ -51,6 +53,18 @@ func _ready():
 	print("GameUI children:", get_children())
 	for c in get_children():
 		print("  child", c.name, "type", c.get_class())
+
+	# connect election panel
+	election_panel = get_node_or_null("ElectionPanel")
+	if election_panel:
+		election_panel.game_manager = game_manager
+		election_panel.visible = false
+
+	# connect policy panel
+	policy_panel = get_node_or_null("PolicyPanel")
+	if policy_panel:
+		policy_panel.game_manager = game_manager
+		policy_panel.visible = false
 
 	# connect button if available
 	if next_button:
@@ -88,6 +102,35 @@ func _process(_delta):
 		actor_prompt_label.text = _build_actor_prompt_text(state)
 	if phase_info_label:
 		phase_info_label.text = _build_phase_text(state)
+	# Toggle election panel vs legacy debug controls
+	var in_election = state.game_phase == "election"
+	var election_panel_active = in_election or (election_panel and election_panel.is_showing_result())
+	if election_panel:
+		election_panel.visible = election_panel_active
+		if not election_panel_active:
+			election_panel.reset_panel()
+	if election_panel and election_panel_active:
+		if nominee_buttons_container:
+			nominee_buttons_container.visible = false
+		if election_votes_container:
+			election_votes_container.visible = false
+	else:
+		if nominee_buttons_container:
+			nominee_buttons_container.visible = true
+		if election_votes_container:
+			election_votes_container.visible = true
+	# Toggle policy panel vs legacy debug controls
+	var in_policy = state.game_phase == "policy" and state.policy_enacted == null
+	if policy_panel:
+		policy_panel.visible = in_policy
+		if not in_policy:
+			policy_panel.reset_panel()
+	if policy_panel and in_policy:
+		if policy_discard_buttons_container:
+			policy_discard_buttons_container.visible = false
+	else:
+		if policy_discard_buttons_container:
+			policy_discard_buttons_container.visible = true
 	_update_nominee_buttons(state)
 	_update_election_vote_buttons(state)
 	_update_policy_discard_buttons(state)

@@ -293,15 +293,20 @@ func _update_voting(state) -> void:
 			col.add_child(no_cb)
 		else:
 			# Interactive voting checkboxes
+			var vote_group = ButtonGroup.new()
+			vote_group.allow_unpress = false
+
 			var yes_cb = CheckBox.new()
 			yes_cb.text = "Yes"
 			yes_cb.button_pressed = (vote_state == 1)
+			yes_cb.button_group = vote_group
 			yes_cb.toggled.connect(_on_vote_toggled.bind(player_id, true))
 			col.add_child(yes_cb)
 
 			var no_cb = CheckBox.new()
 			no_cb.text = "No"
 			no_cb.button_pressed = (vote_state == 0)
+			no_cb.button_group = vote_group
 			no_cb.toggled.connect(_on_vote_toggled.bind(player_id, false))
 			col.add_child(no_cb)
 

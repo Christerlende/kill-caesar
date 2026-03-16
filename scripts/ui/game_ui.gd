@@ -351,19 +351,19 @@ func _update_spending_controls(state) -> void:
 		title.text = "Private spending input: Player %d" % player_id
 		spending_controls_container.add_child(title)
 		var hint = Label.new()
-		hint.text = "Choose one option and how much gold to spend. Unspent gold stays in your purse."
+		hint.text = "Choose one decree and how much gold to spend. Unspent gold stays in your purse."
 		spending_controls_container.add_child(hint)
 
 		var option_row = HBoxContainer.new()
 		option_row.alignment = BoxContainer.ALIGNMENT_CENTER
 		option_row.add_theme_constant_override("separation", 10)
 		var a_btn = Button.new()
-		a_btn.text = "Option A"
+		a_btn.text = "Decree 1"
 		a_btn.disabled = _spend_selected_option == "A"
 		a_btn.pressed.connect(Callable(self, "_on_spending_option_selected").bind("A"))
 		option_row.add_child(a_btn)
 		var b_btn = Button.new()
-		b_btn.text = "Option B"
+		b_btn.text = "Decree 2"
 		b_btn.disabled = _spend_selected_option == "B"
 		b_btn.pressed.connect(Callable(self, "_on_spending_option_selected").bind("B"))
 		option_row.add_child(b_btn)
@@ -549,15 +549,15 @@ func _build_phase_text(state) -> String:
 		lines.append("")
 		lines.append("Policies discarded: %s" % discarded_str)
 		lines.append("Policy enacted: #%d (%s)" % [state.policy_enacted.id, faction_name])
-		lines.append("  Option A: %s" % state.policy_enacted.option_a_text)
-		lines.append("  Option B: %s" % state.policy_enacted.option_b_text)
+		lines.append("  Decree 1: %s" % state.policy_enacted.option_a_text)
+		lines.append("  Decree 2: %s" % state.policy_enacted.option_b_text)
 
 	# Spending results (show after spending phase)
 	if state.game_phase == "spending" and state.spending_stage == "input":
 		lines.append("")
 		lines.append("Private spending input in progress")
 		lines.append("Current player: Player %d" % state.spending_input_player_index)
-		lines.append("Each player chooses one option and an amount to spend")
+		lines.append("Each player chooses one decree and an amount to spend")
 	elif state.game_phase == "spending" and state.spending_stage == "handoff":
 		lines.append("")
 		lines.append("Pass device to next player")
@@ -567,9 +567,9 @@ func _build_phase_text(state) -> String:
 
 	if state.spending_winner != "":
 		lines.append("")
-		lines.append("Gold spent on Option A: %d" % state.spending_option_a_total)
-		lines.append("Gold spent on Option B: %d" % state.spending_option_b_total)
-		lines.append(">> Option %s wins!" % state.spending_winner)
+		lines.append("Gold spent on Decree 1: %d" % state.spending_option_a_total)
+		lines.append("Gold spent on Decree 2: %d" % state.spending_option_b_total)
+		lines.append(">> Decree %s wins!" % _decree_number_from_option_key(state.spending_winner))
 
 	# Game over
 	if state.game_phase == "game_over":
@@ -597,6 +597,13 @@ func _policy_list(ids: Array) -> String:
 	for id in ids:
 		parts.append("Policy #%d" % id)
 	return ", ".join(parts)
+
+func _decree_number_from_option_key(option_key: String) -> String:
+	if option_key == "A":
+		return "1"
+	if option_key == "B":
+		return "2"
+	return option_key
 
 func _on_NextButton_pressed():
 	print("Next button pressed")

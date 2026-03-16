@@ -222,11 +222,11 @@ func _build_policy_card(policy, is_greyed: bool, is_clickable: bool) -> PanelCon
 
 	col.add_child(HSeparator.new())
 
-	# Option A pill
+	# Decree 1 pill
 	var text_color = Color(0.2, 0.15, 0.08, 1) if not is_greyed else Color(0.45, 0.4, 0.35, 0.6)
 	col.add_child(_build_option_pill("A", policy.option_a_text, text_color, is_greyed))
 
-	# Option B pill
+	# Decree 2 pill
 	col.add_child(_build_option_pill("B", policy.option_b_text, text_color, is_greyed))
 
 	# Click area (invisible button overlay)

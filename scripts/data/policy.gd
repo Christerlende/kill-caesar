@@ -22,8 +22,8 @@ static func example_policies() -> Array:
         var p = Policy.new()
         p.id = i
         p.faction = Role.PATRICIAN if i % 2 == 0 else Role.PLEBIAN
-        p.option_a_text = "Option A $i"
-        p.option_b_text = "Option B $i"
+        p.option_a_text = "Decree 1 $i"
+        p.option_b_text = "Decree 2 $i"
         p.option_a_beneficiary = Role.PLEBIAN
         p.option_b_beneficiary = Role.PATRICIAN
         p.option_a_gold_amount = 2

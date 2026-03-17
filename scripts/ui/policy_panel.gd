@@ -16,6 +16,7 @@ const COLOR_GREYED = Color(0.25, 0.22, 0.18, 0.8)
 const COLOR_GREYED_BORDER = Color(0.35, 0.3, 0.22, 0.5)
 const COLOR_PILL_BG = Color(0.0, 0.0, 0.0, 0.15)
 const COLOR_DARK_BG = Color(0.08, 0.04, 0.03, 0.85)
+const ACTION_PANEL_SIZE = Vector2(800, 550)
 
 var game_manager = null
 
@@ -34,6 +35,11 @@ var _last_ui_key: String = ""
 var _card_nodes: Dictionary = {}  # policy_id -> PanelContainer
 
 func _ready():
+	# Keep all action-phase panels at a consistent footprint.
+	custom_minimum_size = ACTION_PANEL_SIZE
+	size = ACTION_PANEL_SIZE
+	clip_contents = true
+
 	var margin = MarginContainer.new()
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL

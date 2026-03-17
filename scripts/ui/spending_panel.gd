@@ -8,6 +8,7 @@ const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
 const COLOR_DIM = Color(0.6, 0.55, 0.45, 0.8)
 const COLOR_A = Color(0.22, 0.42, 0.85, 0.85)
 const COLOR_B = Color(0.78, 0.2, 0.14, 0.85)
+const ACTION_PANEL_SIZE = Vector2(800, 550)
 
 var game_manager = null
 
@@ -23,6 +24,11 @@ var _last_ui_key: String = ""
 var _resolved_animated: bool = false
 
 func _ready() -> void:
+	# Keep all action-phase panels at a consistent footprint.
+	custom_minimum_size = ACTION_PANEL_SIZE
+	size = ACTION_PANEL_SIZE
+	clip_contents = true
+
 	var margin = MarginContainer.new()
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -278,18 +284,8 @@ func _build_input_controls(state) -> void:
 	_controls_box.add_child(hint)
 
 func _build_handoff_controls(state) -> void:
-	var handoff = Label.new()
-	handoff.text = "Private entry saved. Pass to next player."
-	handoff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	handoff.add_theme_color_override("font_color", COLOR_GOLD)
-	handoff.add_theme_font_size_override("font_size", 20)
-	_controls_box.add_child(handoff)
-
-	var pass_btn = Button.new()
-	pass_btn.text = "Pass the Tablet"
-	pass_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	pass_btn.pressed.connect(_on_pass_pressed)
-	_controls_box.add_child(pass_btn)
+	if game_manager and game_manager.advance_spending_turn():
+		_last_ui_key = ""
 
 func _build_resolved_controls(state) -> void:
 	_draft_player_id = -1
@@ -343,14 +339,14 @@ func _wrap_card_with_tribute(card: PanelContainer, letter: String, state) -> VBo
 
 	var col = VBoxContainer.new()
 	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.add_theme_constant_override("separation", 6)
+	col.add_theme_constant_override("separation", 18)
 	col.add_child(card)
 
 	var tribute_label = Label.new()
 	tribute_label.name = "TributeLabel"
 	tribute_label.text = "Tribute pledged: %d gold" % gold_amount
 	tribute_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tribute_label.add_theme_font_size_override("font_size", 15)
+	tribute_label.add_theme_font_size_override("font_size", 19)
 	tribute_label.add_theme_color_override("font_color", COLOR_GOLD if is_winner else COLOR_DIM)
 	tribute_label.modulate = Color(1, 1, 1, 0)
 	col.add_child(tribute_label)

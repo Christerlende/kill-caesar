@@ -432,7 +432,15 @@ func set_spending_allocation(option_key: String, spend_amount: int) -> bool:
 		return false
 	state.spending_private_inputs[player_id] = {"option": option_key, "amount": spend_amount}
 	state.spending_confirmed_players[player_id] = true
-	state.spending_stage = "handoff"
+	# Auto-advance to the next player (or resolve totals) to avoid extra handoff clicks.
+	var next_player = state.spending_input_player_index + 1
+	while next_player < state.players.size() and state.spending_confirmed_players[next_player]:
+		next_player += 1
+	if next_player >= state.players.size():
+		resolve_spending_totals()
+	else:
+		state.spending_input_player_index = next_player
+		state.spending_stage = "input"
 	print("Player %d spending captured privately." % player_id)
 	return true
 

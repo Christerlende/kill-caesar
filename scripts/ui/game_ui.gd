@@ -29,6 +29,12 @@ var election_panel = null
 var policy_panel = null
 var spending_panel = null
 
+const ACTION_PANEL_OFFSET_LEFT: float = -400.0
+const ACTION_PANEL_OFFSET_TOP: float = -240.0
+const ACTION_PANEL_OFFSET_RIGHT: float = 400.0
+const ACTION_PANEL_OFFSET_BOTTOM: float = 310.0
+const ACTION_PANEL_MIN_SIZE: Vector2 = Vector2(800, 550)
+
 func _ready():
 	# determine game manager reference
 	if get_parent() and get_parent().has_method("start_round"):
@@ -43,6 +49,10 @@ func _ready():
 	print("game_manager is", game_manager, "class", game_manager.get_class())
 
 	# grab persistent HUD elements first
+	var top_hud_panel = get_node_or_null("TopHudPanel")
+	if top_hud_panel:
+		top_hud_panel.clip_contents = true
+
 	round_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/RoundLabel")
 	influence_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/InfluenceLabel")
 	consul_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/ConsulLabel")
@@ -59,6 +69,9 @@ func _ready():
 		consul_label = $VBoxContainer.get_node_or_null("ConsulLabel")
 	if not actor_prompt_label:
 		actor_prompt_label = $VBoxContainer.get_node_or_null("ActorPromptLabel")
+	if actor_prompt_label:
+		# Keep this as a single line to avoid temporary startup overlap with middle panel.
+		actor_prompt_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 
 	# grab legacy/main control containers
 	nominee_buttons_container = $VBoxContainer.get_node_or_null("NomineeButtonsContainer")
@@ -99,18 +112,21 @@ func _ready():
 	election_panel = get_node_or_null("ElectionPanel")
 	if election_panel:
 		election_panel.game_manager = game_manager
+		_apply_action_panel_frame(election_panel)
 		election_panel.visible = false
 
 	# connect policy panel
 	policy_panel = get_node_or_null("PolicyPanel")
 	if policy_panel:
 		policy_panel.game_manager = game_manager
+		_apply_action_panel_frame(policy_panel)
 		policy_panel.visible = false
 
 	# connect spending panel
 	spending_panel = get_node_or_null("SpendingPanel")
 	if spending_panel:
 		spending_panel.game_manager = game_manager
+		_apply_action_panel_frame(spending_panel)
 		spending_panel.visible = false
 
 	# connect button if available
@@ -198,6 +214,12 @@ func _process(_delta):
 		gold_gain_label.text = "Gold gain each round: %d" % _gold_gain_for_role(viewer_role)
 	if actor_prompt_label:
 		actor_prompt_label.text = _build_actor_prompt_text(state)
+	if election_panel:
+		_apply_action_panel_frame(election_panel)
+	if policy_panel:
+		_apply_action_panel_frame(policy_panel)
+	if spending_panel:
+		_apply_action_panel_frame(spending_panel)
 	# Toggle election panel vs legacy debug controls
 	var in_election = state.game_phase == "election"
 	var election_transition_active = false
@@ -244,6 +266,18 @@ func _process(_delta):
 	_update_election_vote_buttons(state)
 	_update_policy_discard_buttons(state)
 	_update_spending_controls(state)
+
+func _apply_action_panel_frame(panel: Control) -> void:
+	# Hard-lock exact panel rect so all action screens share identical width/height.
+	panel.anchor_left = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = ACTION_PANEL_OFFSET_LEFT
+	panel.offset_top = ACTION_PANEL_OFFSET_TOP
+	panel.offset_right = ACTION_PANEL_OFFSET_RIGHT
+	panel.offset_bottom = ACTION_PANEL_OFFSET_BOTTOM
+	panel.custom_minimum_size = ACTION_PANEL_MIN_SIZE
 
 func _update_nominee_buttons(state) -> void:
 	if not nominee_buttons_container:
@@ -467,10 +501,6 @@ func _gold_gain_for_role(role: int) -> int:
 	return 4
 
 func _build_actor_prompt_text(state) -> String:
-	var lines = []
-	if _round_transition_time_left > 0.0 and _round_transition_message != "":
-		lines.append(_round_transition_message)
-
 	var actor_text = "Current actor: "
 	match state.game_phase:
 		"election":
@@ -502,8 +532,9 @@ func _build_actor_prompt_text(state) -> String:
 		_:
 			actor_text += state.game_phase
 
-	lines.append(actor_text)
-	return "\n".join(lines)
+	if _round_transition_time_left > 0.0 and _round_transition_message != "":
+		return "%s | %s" % [_round_transition_message, actor_text]
+	return actor_text
 
 func _build_phase_text(state) -> String:
 	var lines = ["Phase: %s" % state.game_phase]

@@ -19,7 +19,7 @@ func _ready() -> void:
 	rules_popup.visible = false
 
 func _on_play_button_pressed() -> void:
-	GameManager.influence_to_win = 5
+	GameManager.influence_to_win = 7
 	start_game_pressed.emit()
 	get_tree().change_scene_to_file("res://scenes/game.tscn")
 

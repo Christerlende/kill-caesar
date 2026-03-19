@@ -1,7 +1,9 @@
 extends PanelContainer
 
-# Roman-themed election panel for the player-facing UI.
-# Shows nomination, per-player voting with checkboxes, and result reveal.
+# Roman-themed election panel with three sections:
+# Top: nomination info / header
+# Middle: voting cards
+# Bottom: election result + continue
 
 const COLOR_GOLD = Color(0.95, 0.82, 0.25, 1)
 const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
@@ -9,28 +11,30 @@ const COLOR_RED = Color(0.85, 0.15, 0.1, 1)
 const COLOR_GREEN = Color(0.2, 0.8, 0.25, 1)
 const COLOR_DIM = Color(0.6, 0.55, 0.45, 0.7)
 const COLOR_DARK_BG = Color(0.08, 0.04, 0.03, 0.85)
-const ACTION_PANEL_SIZE = Vector2(800, 550)
 
 var game_manager = null
 
-# internal refs built in _ready
+# Section containers
+var _top_section: VBoxContainer
+var _middle_section: VBoxContainer
+var _bottom_section: VBoxContainer
+var _sep1: HSeparator
+var _sep2: HSeparator
+var _middle_content: VBoxContainer
+var _bottom_content: VBoxContainer
+
+# Content refs
 var _header_label: Label
 var _consul_label: Label
 var _nominee_label: Label
 var _instruction_label: Label
-var _nominee_section: VBoxContainer
-var _voting_section: VBoxContainer
+var _nominee_btn_container: VBoxContainer
 var _voter_grid: HBoxContainer
-var _result_reveal_slot: Control
-var _result_reveal_group: VBoxContainer
-var _result_section: VBoxContainer
 var _result_label: Label
 var _result_breakdown: Label
 var _continue_button: Button
 
-var _proceed_button: Button
-
-# state tracking to avoid rebuilds
+# state tracking
 var _last_nominee_index: int = -99
 var _last_vote_signature: String = ""
 var _last_phase: String = ""
@@ -43,91 +47,95 @@ var _voting_reveal_played: bool = false
 const RESULT_TRANSITION_SECONDS: float = 20.0
 
 func _ready():
-	# Keep all action-phase panels at a consistent footprint.
-	custom_minimum_size = ACTION_PANEL_SIZE
-	size = ACTION_PANEL_SIZE
 	clip_contents = true
 
 	var margin = MarginContainer.new()
 	margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_theme_constant_override("margin_left", 18)
+	margin.add_theme_constant_override("margin_top", 14)
+	margin.add_theme_constant_override("margin_right", 18)
+	margin.add_theme_constant_override("margin_bottom", 14)
 	add_child(margin)
 
-	var root_vbox = VBoxContainer.new()
-	root_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	root_vbox.add_theme_constant_override("separation", 12)
-	margin.add_child(root_vbox)
+	var root = VBoxContainer.new()
+	root.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	root.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_theme_constant_override("separation", 0)
+	margin.add_child(root)
 
-	# Header
-	_header_label = _make_label("SENATE ELECTION", 32, COLOR_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-	root_vbox.add_child(_header_label)
-	root_vbox.add_child(HSeparator.new())
+	# ── Top Section: Header + Nomination ──
+	_top_section = VBoxContainer.new()
+	_top_section.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_top_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_top_section.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_top_section.add_theme_constant_override("separation", 10)
+	root.add_child(_top_section)
 
-	# Consul info
-	_consul_label = _make_label("Consul: —", 20, COLOR_CREAM, HORIZONTAL_ALIGNMENT_CENTER)
-	root_vbox.add_child(_consul_label)
+	_header_label = _make_label("SENATE ELECTION", 28, COLOR_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	_top_section.add_child(_header_label)
 
-	# Nominee section (nomination buttons appear here)
-	_nominee_section = VBoxContainer.new()
-	_nominee_section.add_theme_constant_override("separation", 8)
-	root_vbox.add_child(_nominee_section)
+	_consul_label = _make_label("Consul: —", 18, COLOR_CREAM, HORIZONTAL_ALIGNMENT_CENTER)
+	_top_section.add_child(_consul_label)
 
-	_nominee_label = _make_label("", 20, COLOR_CREAM, HORIZONTAL_ALIGNMENT_CENTER)
-	_nominee_section.add_child(_nominee_label)
+	_nominee_label = _make_label("", 18, COLOR_CREAM, HORIZONTAL_ALIGNMENT_CENTER)
+	_top_section.add_child(_nominee_label)
 
-	root_vbox.add_child(HSeparator.new())
+	_nominee_btn_container = VBoxContainer.new()
+	_nominee_btn_container.add_theme_constant_override("separation", 8)
+	_top_section.add_child(_nominee_btn_container)
 
-	# Voting section
-	_voting_section = VBoxContainer.new()
-	_voting_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_voting_section.add_theme_constant_override("separation", 10)
-	_voting_section.visible = false
-	_voting_section.modulate = Color(1, 1, 1, 1)
-	root_vbox.add_child(_voting_section)
+	# ── Separator 1 ──
+	_sep1 = HSeparator.new()
+	root.add_child(_sep1)
+
+	# ── Middle Section: Voting ──
+	_middle_section = VBoxContainer.new()
+	_middle_section.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_middle_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_middle_section.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_middle_section.add_theme_constant_override("separation", 0)
+	root.add_child(_middle_section)
+
+	_middle_content = VBoxContainer.new()
+	_middle_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_middle_content.add_theme_constant_override("separation", 10)
+	_middle_content.visible = false
+	_middle_section.add_child(_middle_content)
 
 	_instruction_label = _make_label("Citizens of Rome, cast your votes!", 18, COLOR_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-	_voting_section.add_child(_instruction_label)
+	_middle_content.add_child(_instruction_label)
 
 	_voter_grid = HBoxContainer.new()
 	_voter_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_voter_grid.alignment = BoxContainer.ALIGNMENT_CENTER
 	_voter_grid.add_theme_constant_override("separation", 12)
-	_voting_section.add_child(_voter_grid)
+	_middle_content.add_child(_voter_grid)
 
-	# Result reveal slot reserves layout space; inner group is animated freely.
-	_result_reveal_slot = Control.new()
-	_result_reveal_slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_result_reveal_slot.visible = false
-	_result_reveal_slot.clip_contents = false
-	root_vbox.add_child(_result_reveal_slot)
+	# ── Separator 2 ──
+	_sep2 = HSeparator.new()
+	root.add_child(_sep2)
 
-	# Result reveal group (animated in as one lower block)
-	_result_reveal_group = VBoxContainer.new()
-	_result_reveal_group.add_theme_constant_override("separation", 8)
-	_result_reveal_group.visible = false
-	_result_reveal_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_result_reveal_group.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_result_reveal_group.offset_left = 0
-	_result_reveal_group.offset_top = 0
-	_result_reveal_group.offset_right = 0
-	_result_reveal_group.offset_bottom = 0
-	_result_reveal_slot.add_child(_result_reveal_group)
+	# ── Bottom Section: Result ──
+	_bottom_section = VBoxContainer.new()
+	_bottom_section.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_bottom_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bottom_section.alignment = BoxContainer.ALIGNMENT_BEGIN
+	_bottom_section.add_theme_constant_override("separation", 0)
+	root.add_child(_bottom_section)
 
-	# Result section
-	_result_section = VBoxContainer.new()
-	_result_section.add_theme_constant_override("separation", 8)
-	_result_section.visible = true
-	_result_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_result_reveal_group.add_child(_result_section)
-
-	_result_section.add_child(HSeparator.new())
+	_bottom_content = VBoxContainer.new()
+	_bottom_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bottom_content.add_theme_constant_override("separation", 10)
+	_bottom_content.visible = false
+	_bottom_section.add_child(_bottom_content)
 
 	_result_label = _make_label("", 26, COLOR_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
-	_result_section.add_child(_result_label)
+	_bottom_content.add_child(_result_label)
 
 	_result_breakdown = _make_label("", 16, COLOR_DIM, HORIZONTAL_ALIGNMENT_CENTER)
 	_result_breakdown.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_result_section.add_child(_result_breakdown)
+	_bottom_content.add_child(_result_breakdown)
 
 	_continue_button = Button.new()
 	_continue_button.text = "Continue"
@@ -138,33 +146,26 @@ func _ready():
 	_continue_button.add_theme_color_override("font_focus_color", COLOR_CREAM)
 	_continue_button.add_theme_color_override("font_hover_color", COLOR_CREAM)
 	_continue_button.add_theme_color_override("font_pressed_color", COLOR_CREAM)
-	var continue_style = StyleBoxFlat.new()
-	continue_style.bg_color = Color(0.14, 0.62, 0.18, 0.95)
-	continue_style.border_width_left = 1
-	continue_style.border_width_top = 1
-	continue_style.border_width_right = 1
-	continue_style.border_width_bottom = 1
-	continue_style.border_color = Color(0.78, 0.9, 0.78, 0.7)
-	continue_style.corner_radius_top_left = 6
-	continue_style.corner_radius_top_right = 6
-	continue_style.corner_radius_bottom_left = 6
-	continue_style.corner_radius_bottom_right = 6
-	continue_style.content_margin_left = 16
-	continue_style.content_margin_right = 16
-	continue_style.content_margin_top = 8
-	continue_style.content_margin_bottom = 8
-	_continue_button.add_theme_stylebox_override("normal", continue_style)
-	_continue_button.add_theme_stylebox_override("focus", continue_style)
-	_continue_button.add_theme_stylebox_override("pressed", continue_style)
-	_continue_button.add_theme_stylebox_override("hover", continue_style)
-	_result_reveal_group.add_child(_continue_button)
-
-	_proceed_button = Button.new()
-	_proceed_button.text = "Proceed"
-	_proceed_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_proceed_button.visible = false
-	_proceed_button.pressed.connect(_on_proceed_pressed)
-	_result_reveal_group.add_child(_proceed_button)
+	var cs = StyleBoxFlat.new()
+	cs.bg_color = Color(0.14, 0.62, 0.18, 0.95)
+	cs.border_width_left = 1
+	cs.border_width_top = 1
+	cs.border_width_right = 1
+	cs.border_width_bottom = 1
+	cs.border_color = Color(0.78, 0.9, 0.78, 0.7)
+	cs.corner_radius_top_left = 6
+	cs.corner_radius_top_right = 6
+	cs.corner_radius_bottom_left = 6
+	cs.corner_radius_bottom_right = 6
+	cs.content_margin_left = 16
+	cs.content_margin_right = 16
+	cs.content_margin_top = 8
+	cs.content_margin_bottom = 8
+	_continue_button.add_theme_stylebox_override("normal", cs)
+	_continue_button.add_theme_stylebox_override("focus", cs)
+	_continue_button.add_theme_stylebox_override("pressed", cs)
+	_continue_button.add_theme_stylebox_override("hover", cs)
+	_bottom_content.add_child(_continue_button)
 
 func is_showing_result() -> bool:
 	return _showing_result
@@ -175,7 +176,6 @@ func _process(_delta):
 	var state = game_manager.state
 	if not state:
 		return
-	# Keep updating when showing result even though phase has moved on
 	if state.game_phase != "election" and not _showing_result:
 		return
 	if _showing_result:
@@ -192,23 +192,21 @@ func _process(_delta):
 
 func _update_consul_info(state) -> void:
 	var consul = state.players[state.current_consul_index]
-	_consul_label.text = "Consul: Player %d (%s)" % [consul.player_id, game_manager.role_name(consul.role)]
+	_consul_label.text = "Consul: Player %d (%s)" % [consul.player_id + 1, game_manager.role_name(consul.role)]
 
 func _update_nominee(state) -> void:
 	if state.election_nominee_index < 0:
 		_nominee_label.text = "The consul must nominate a co-consul."
-		_voting_section.visible = false
-		_voting_section.modulate = Color(1, 1, 1, 1)
+		_middle_content.visible = false
+		_bottom_content.visible = false
 		_voting_reveal_played = false
-		_result_reveal_group.visible = false
-		_result_reveal_slot.visible = false
 		_continue_button.visible = false
 		if _last_nominee_index != -1:
 			_rebuild_nominee_buttons(state)
 			_last_nominee_index = -1
 	else:
 		var nominee = state.players[state.election_nominee_index]
-		_nominee_label.text = "Nominated for co-consul: Player %d (%s)" % [nominee.player_id, game_manager.role_name(nominee.role)]
+		_nominee_label.text = "Nominated for co-consul: Player %d (%s)" % [nominee.player_id + 1, game_manager.role_name(nominee.role)]
 		if _last_nominee_index < 0:
 			_clear_nominee_buttons()
 			_last_nominee_index = state.election_nominee_index
@@ -225,21 +223,21 @@ func _rebuild_nominee_buttons(state) -> void:
 	for idx in candidates:
 		var player = state.players[idx]
 		var b = Button.new()
-		b.text = "Player %d (%s)" % [player.player_id, game_manager.role_name(player.role)]
+		b.text = "Player %d (%s)" % [player.player_id + 1, game_manager.role_name(player.role)]
 		b.pressed.connect(_on_nominee_selected.bind(idx))
 		btn_row.add_child(b)
-	_nominee_section.add_child(btn_row)
+	_nominee_btn_container.add_child(btn_row)
 
 func _clear_nominee_buttons() -> void:
-	var row = _nominee_section.get_node_or_null("NomineeBtnRow")
+	var row = _nominee_btn_container.get_node_or_null("NomineeBtnRow")
 	if row:
 		row.queue_free()
 
 func _update_voting(state) -> void:
 	if state.election_nominee_index < 0:
 		return
-	if not _voting_section.visible:
-		_voting_section.visible = true
+	if not _middle_content.visible:
+		_middle_content.visible = true
 		if not _voting_reveal_played:
 			_play_voting_reveal_animation()
 
@@ -258,10 +256,10 @@ func _update_voting(state) -> void:
 	var election_resolved = state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0
 	var player_count = max(1, state.players.size())
 	var row_gap = 10
-	var panel_inner_width = int(size.x) if size.x > 0 else int(ACTION_PANEL_SIZE.x)
-	var usable_width = panel_inner_width - 32
+	var panel_inner_width = int(size.x) if size.x > 0 else 600
+	var usable_width = panel_inner_width - 64
 	var card_width = int(floor(float(usable_width - row_gap * (player_count - 1)) / float(player_count)))
-	card_width = clamp(card_width, 92, 130)
+	card_width = clamp(card_width, 80, 130)
 	_voter_grid.add_theme_constant_override("separation", row_gap)
 
 	for player_id in range(state.players.size()):
@@ -280,10 +278,10 @@ func _update_voting(state) -> void:
 		card_style.corner_radius_top_right = 6
 		card_style.corner_radius_bottom_left = 6
 		card_style.corner_radius_bottom_right = 6
-		card_style.content_margin_left = 12.0
-		card_style.content_margin_right = 12.0
-		card_style.content_margin_top = 10.0
-		card_style.content_margin_bottom = 10.0
+		card_style.content_margin_left = 10.0
+		card_style.content_margin_right = 10.0
+		card_style.content_margin_top = 8.0
+		card_style.content_margin_bottom = 8.0
 		card.add_theme_stylebox_override("panel", card_style)
 		card.custom_minimum_size = Vector2(card_width, 0)
 
@@ -292,19 +290,17 @@ func _update_voting(state) -> void:
 		col.alignment = BoxContainer.ALIGNMENT_CENTER
 		card.add_child(col)
 
-		# Player name row with status icon
 		var name_row = HBoxContainer.new()
 		name_row.alignment = BoxContainer.ALIGNMENT_CENTER
 		name_row.add_theme_constant_override("separation", 6)
 		col.add_child(name_row)
 
 		var name_label = Label.new()
-		name_label.text = "Player %d" % player.player_id
+		name_label.text = "Player %d" % (player.player_id + 1)
 		name_label.add_theme_font_size_override("font_size", 16)
 		name_label.add_theme_color_override("font_color", COLOR_CREAM)
 		name_row.add_child(name_label)
 
-		# Green checkmark if voted
 		if vote_state != -1:
 			var check_icon = Label.new()
 			check_icon.text = "✓"
@@ -312,7 +308,6 @@ func _update_voting(state) -> void:
 			check_icon.add_theme_color_override("font_color", COLOR_GREEN)
 			name_row.add_child(check_icon)
 
-		# Role subtitle
 		var role_label = Label.new()
 		role_label.text = game_manager.role_name(player.role)
 		role_label.add_theme_font_size_override("font_size", 13)
@@ -321,7 +316,6 @@ func _update_voting(state) -> void:
 		col.add_child(role_label)
 
 		if election_resolved:
-			# Show locked results with crosses in correct checkbox
 			var yes_cb = CheckBox.new()
 			yes_cb.text = "Yes"
 			yes_cb.disabled = true
@@ -338,7 +332,6 @@ func _update_voting(state) -> void:
 				no_cb.add_theme_color_override("font_color", COLOR_RED)
 			col.add_child(no_cb)
 		else:
-			# Interactive voting checkboxes
 			var vote_group = ButtonGroup.new()
 			vote_group.allow_unpress = false
 
@@ -366,14 +359,11 @@ func _update_voting(state) -> void:
 func _update_result(state) -> void:
 	var election_resolved = state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0
 	if not election_resolved:
-		_result_reveal_group.visible = false
-		_result_reveal_slot.visible = false
-		_result_reveal_slot.custom_minimum_size.y = 0
+		_bottom_content.visible = false
 		_result_reveal_played = false
 		return
 
-	_result_reveal_slot.visible = true
-	_result_reveal_group.visible = true
+	_bottom_content.visible = true
 	if state.election_passed:
 		_result_label.text = "Election successful"
 		_result_label.add_theme_color_override("font_color", COLOR_GREEN)
@@ -383,25 +373,21 @@ func _update_result(state) -> void:
 
 	var yes_names = []
 	for pid in state.election_votes_yes:
-		yes_names.append("Player %d" % pid)
+		yes_names.append("Player %d" % (pid + 1))
 	var no_names = []
 	for pid in state.election_votes_no:
-		no_names.append("Player %d" % pid)
+		no_names.append("Player %d" % (pid + 1))
 	var yes_str = ", ".join(yes_names) if yes_names.size() > 0 else "none"
 	var no_str = ", ".join(no_names) if no_names.size() > 0 else "none"
 	var transition_text = _build_transition_text(state)
 	var details = "%s\n\nYea: %s\nNay: %s" % [transition_text, yes_str, no_str]
 	_result_breakdown.text = details
 
-	# Reserve enough layout height so animation doesn't overlap voting cards.
-	var min_h = _result_reveal_group.get_combined_minimum_size().y
-	_result_reveal_slot.custom_minimum_size.y = min_h
-
 func _build_transition_text(state) -> String:
-	var consul_id = state.current_consul_index
-	var nominee_id = state.election_nominee_index
+	var consul_id = state.current_consul_index + 1
+	var nominee_id = state.election_nominee_index + 1
 	if state.election_passed:
-		var co_consul_id = state.current_co_consul_index if state.current_co_consul_index >= 0 else nominee_id
+		var co_consul_id = (state.current_co_consul_index + 1) if state.current_co_consul_index >= 0 else nominee_id
 		return "Player %d and Player %d step into power as consul and co-consul." % [consul_id, co_consul_id]
 	return "Player %d and Player %d do not gain power. The senate rejects their rise this round." % [consul_id, nominee_id]
 
@@ -414,18 +400,11 @@ func reset_panel() -> void:
 	_auto_resolve_queued = false
 	_result_reveal_played = false
 	_voting_reveal_played = false
-	_voting_section.visible = false
-	_voting_section.modulate = Color(1, 1, 1, 1)
-	_result_reveal_group.visible = false
-	_result_reveal_slot.visible = false
-	_result_reveal_slot.custom_minimum_size.y = 0
-	_result_reveal_group.modulate = Color(1, 1, 1, 1)
-	_result_reveal_group.offset_left = 0
-	_result_reveal_group.offset_top = 0
-	_result_reveal_group.offset_right = 0
-	_result_reveal_group.offset_bottom = 0
+	_middle_content.visible = false
+	_middle_content.modulate = Color(1, 1, 1, 1)
+	_bottom_content.visible = false
+	_bottom_content.modulate = Color(1, 1, 1, 1)
 	_continue_button.visible = false
-	_proceed_button.visible = false
 	_clear_nominee_buttons()
 	for child in _voter_grid.get_children():
 		child.queue_free()
@@ -445,16 +424,12 @@ func _on_continue_pressed() -> void:
 		return
 	_resolve_election_and_show_result()
 
-func _on_proceed_pressed() -> void:
-	_advance_after_result()
-
 func _advance_after_result() -> void:
 	if not _showing_result:
 		return
 	_showing_result = false
 	_result_auto_advance_time_left = 0.0
 	_continue_button.visible = false
-	_proceed_button.visible = false
 	if game_manager and game_manager.state and game_manager.state.game_phase == "round_end":
 		game_manager.progress()
 
@@ -470,13 +445,11 @@ func _resolve_election_and_show_result() -> void:
 		return
 	if not game_manager.are_election_votes_complete():
 		return
-	# Resolve the election, then freeze the panel to show the result.
 	game_manager.progress()
 	_showing_result = true
 	_result_auto_advance_time_left = RESULT_TRANSITION_SECONDS
 	_continue_button.visible = true
 	_update_continue_button_text()
-	_proceed_button.visible = false
 	state = game_manager.state
 	if state:
 		_last_vote_signature = ""
@@ -485,37 +458,23 @@ func _resolve_election_and_show_result() -> void:
 		_play_result_reveal_animation()
 
 func _play_result_reveal_animation() -> void:
-	if not _result_reveal_group or _result_reveal_played:
+	if not _bottom_content or _result_reveal_played:
 		return
 	_result_reveal_played = true
-
-	# Start slightly above final position, then slide down to the exact original spot.
-	var start_offset_y = -14.0
-	_result_reveal_group.modulate = Color(1, 1, 1, 0)
-	_result_reveal_group.offset_left = 0
-	_result_reveal_group.offset_right = 0
-	_result_reveal_group.offset_top = start_offset_y
-	_result_reveal_group.offset_bottom = start_offset_y
-
+	_bottom_content.modulate = Color(1, 1, 1, 0)
 	var tween = create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(_result_reveal_group, "modulate:a", 1.0, 0.50).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tween.tween_property(_result_reveal_group, "offset_top", 0.0, 0.50).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	tween.tween_property(_result_reveal_group, "offset_bottom", 0.0, 0.50).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tween.tween_property(_bottom_content, "modulate:a", 1.0, 0.50).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
 func _play_voting_reveal_animation() -> void:
-	if not _voting_section:
+	if not _middle_content:
 		return
 	_voting_reveal_played = true
-	_voting_section.modulate = Color(1, 1, 1, 0)
+	_middle_content.modulate = Color(1, 1, 1, 0)
 	var tween = create_tween()
-	tween.tween_property(_voting_section, "modulate:a", 1.0, 0.45).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tween.tween_property(_middle_content, "modulate:a", 1.0, 0.45).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
 func _update_continue_button_text() -> void:
-	if not _continue_button:
-		return
-	if not _showing_result:
-		_continue_button.text = "Continue"
+	if not _continue_button or not _showing_result:
 		return
 	_continue_button.text = "Continue (%d)" % int(ceil(_result_auto_advance_time_left))
 

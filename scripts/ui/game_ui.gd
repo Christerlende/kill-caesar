@@ -28,12 +28,12 @@ var _round_transition_time_left: float = 0.0
 var election_panel = null
 var policy_panel = null
 var spending_panel = null
+var info_panel = null
 
-const ACTION_PANEL_OFFSET_LEFT: float = -400.0
-const ACTION_PANEL_OFFSET_TOP: float = -240.0
-const ACTION_PANEL_OFFSET_RIGHT: float = 400.0
-const ACTION_PANEL_OFFSET_BOTTOM: float = 310.0
-const ACTION_PANEL_MIN_SIZE: Vector2 = Vector2(800, 550)
+const ACTION_PANEL_OFFSET_LEFT: float = 375.0
+const ACTION_PANEL_OFFSET_TOP: float = 210.0
+const ACTION_PANEL_OFFSET_RIGHT: float = -18.0
+const ACTION_PANEL_OFFSET_BOTTOM: float = -14.0
 
 func _ready():
 	# determine game manager reference
@@ -129,6 +129,16 @@ func _ready():
 		_apply_action_panel_frame(spending_panel)
 		spending_panel.visible = false
 
+	# connect info panel (left sidebar)
+	info_panel = get_node_or_null("InfoPanel")
+	if info_panel:
+		info_panel.game_manager = game_manager
+
+	# hide legacy bottom info panel
+	var hidden_info_panel = get_node_or_null("HiddenInfoPanel")
+	if hidden_info_panel:
+		hidden_info_panel.visible = false
+
 	# connect button if available
 	if next_button:
 		next_button.connect("pressed", Callable(self, "_on_NextButton_pressed"))
@@ -185,7 +195,7 @@ func _process(_delta):
 		_last_seen_round = state.round_number
 		if state.players.size() > 0:
 			var round_consul = state.players[state.current_consul_index]
-			_round_transition_message = "Round %d starts. Consul: Player %d (%s)" % [state.round_number, round_consul.player_id, game_manager.role_name(round_consul.role)]
+			_round_transition_message = "Round %d starts. Consul: Player %d (%s)" % [state.round_number, round_consul.player_id + 1, game_manager.role_name(round_consul.role)]
 			_round_transition_time_left = 2.5
 	if _round_transition_time_left > 0.0:
 		_round_transition_time_left = max(_round_transition_time_left - _delta, 0.0)
@@ -204,8 +214,8 @@ func _process(_delta):
 		var co_consul_text = "Not chosen yet"
 		if state.current_co_consul_index >= 0:
 			var co_consul = state.players[state.current_co_consul_index]
-			co_consul_text = "Player %d (%s)" % [co_consul.player_id, game_manager.role_name(co_consul.role)]
-		consul_label.text = "Consul: Player %d (%s) | Co-Consul: %s" % [consul.player_id, game_manager.role_name(consul.role), co_consul_text]
+			co_consul_text = "Player %d (%s)" % [co_consul.player_id + 1, game_manager.role_name(co_consul.role)]
+		consul_label.text = "Consul: Player %d (%s) | Co-Consul: %s" % [consul.player_id + 1, game_manager.role_name(consul.role), co_consul_text]
 	if player_purses_label:
 		player_purses_label.text = _build_player_purses_text(state)
 	if gold_gain_label and state.players.size() > 0:
@@ -268,16 +278,15 @@ func _process(_delta):
 	_update_spending_controls(state)
 
 func _apply_action_panel_frame(panel: Control) -> void:
-	# Hard-lock exact panel rect so all action screens share identical width/height.
-	panel.anchor_left = 0.5
-	panel.anchor_top = 0.5
-	panel.anchor_right = 0.5
-	panel.anchor_bottom = 0.5
+	panel.anchor_left = 0.0
+	panel.anchor_top = 0.0
+	panel.anchor_right = 1.0
+	panel.anchor_bottom = 1.0
 	panel.offset_left = ACTION_PANEL_OFFSET_LEFT
 	panel.offset_top = ACTION_PANEL_OFFSET_TOP
 	panel.offset_right = ACTION_PANEL_OFFSET_RIGHT
 	panel.offset_bottom = ACTION_PANEL_OFFSET_BOTTOM
-	panel.custom_minimum_size = ACTION_PANEL_MIN_SIZE
+	panel.custom_minimum_size = Vector2.ZERO
 
 func _update_nominee_buttons(state) -> void:
 	if not nominee_buttons_container:
@@ -317,7 +326,7 @@ func _update_election_vote_buttons(state) -> void:
 		elif vote_state == 0:
 			vote_text = "NO"
 		var label = Label.new()
-		label.text = "Player %d vote: %s" % [player_id, vote_text]
+		label.text = "Player %d vote: %s" % [player_id + 1, vote_text]
 		var yes_button = Button.new()
 		yes_button.text = "Yes"
 		yes_button.pressed.connect(Callable(self, "_on_vote_yes_pressed").bind(player_id))
@@ -382,7 +391,7 @@ func _update_spending_controls(state) -> void:
 			_spend_selected_option = "A"
 			_spend_amount_draft = 0
 		var title = Label.new()
-		title.text = "Private spending input: Player %d" % player_id
+		title.text = "Private spending input: Player %d" % (player_id + 1)
 		spending_controls_container.add_child(title)
 		var hint = Label.new()
 		hint.text = "Choose one decree and how much gold to spend. Unspent gold stays in your purse."
@@ -468,22 +477,22 @@ func _build_player_purses_text(state) -> String:
 			if player.player_id == viewer.player_id:
 				continue
 			if player.role == game_manager.Role.PATRICIAN:
-				patricians.append("Player %d" % player.player_id)
+				patricians.append("Player %d" % (player.player_id + 1))
 			elif player.role == game_manager.Role.PLEBIAN:
-				plebeians.append("Player %d" % player.player_id)
+				plebeians.append("Player %d" % (player.player_id + 1))
 		var patrician_text = " & ".join(patricians) if patricians.size() > 0 else "none"
 		var plebeian_text = ", ".join(plebeians) if plebeians.size() > 0 else "none"
-		return "Player %d (Caesar) | Own gold: %d | Patricians: %s | Plebeians: %s" % [viewer.player_id, own_gold, patrician_text, plebeian_text]
+		return "Player %d (Caesar) | Own gold: %d | Patricians: %s | Plebeians: %s" % [viewer.player_id + 1, own_gold, patrician_text, plebeian_text]
 
 	if viewer_role == game_manager.Role.PATRICIAN:
 		var other_patrician = "Unknown"
 		for player in state.players:
 			if player.player_id != viewer.player_id and player.role == game_manager.Role.PATRICIAN:
-				other_patrician = "Player %d" % player.player_id
+				other_patrician = "Player %d" % (player.player_id + 1)
 				break
-		return "Player %d (Patrician) | Own gold: %d | Allied Patrician: %s" % [viewer.player_id, own_gold, other_patrician]
+		return "Player %d (Patrician) | Own gold: %d | Allied Patrician: %s" % [viewer.player_id + 1, own_gold, other_patrician]
 
-	return "Player %d (Plebeian) | Own gold: %d" % [viewer.player_id, own_gold]
+	return "Player %d (Plebeian) | Own gold: %d" % [viewer.player_id + 1, own_gold]
 
 func _visible_gold_for_player(state, player_index: int) -> int:
 	var current = state.players[player_index].money
@@ -542,7 +551,7 @@ func _build_phase_text(state) -> String:
 	# Election results (show after election has run)
 	if state.election_nominee_index >= 0:
 		var nominee = state.players[state.election_nominee_index]
-		lines.append("Nominee: Player %d (%s)" % [nominee.player_id, game_manager.role_name(nominee.role)])
+		lines.append("Nominee: Player %d (%s)" % [nominee.player_id + 1, game_manager.role_name(nominee.role)])
 		if state.game_phase == "election" and state.ineligible_co_consul_indices.size() > 0:
 			lines.append("Blocked from co-consul this round: %s" % _player_list(state.ineligible_co_consul_indices))
 		if state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0:
@@ -604,10 +613,10 @@ func _build_phase_text(state) -> String:
 
 	# Game over
 	if state.game_phase == "game_over":
-		if state.influence_patrician >= 5:
+		if state.influence_patrician >= game_manager.influence_to_win:
 			lines.append("")
 			lines.append("PATRICIANS WIN!")
-		elif state.influence_plebian >= 5:
+		elif state.influence_plebian >= game_manager.influence_to_win:
 			lines.append("")
 			lines.append("PLEBEIANS WIN!")
 
@@ -618,7 +627,7 @@ func _player_list(ids: Array) -> String:
 		return "none"
 	var parts = []
 	for id in ids:
-		parts.append("Player %d" % id)
+		parts.append("Player %d" % (id + 1))
 	return ", ".join(parts)
 
 func _policy_list(ids: Array) -> String:

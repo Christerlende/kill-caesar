@@ -8,7 +8,6 @@ const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
 const COLOR_DIM = Color(0.6, 0.55, 0.45, 0.8)
 const COLOR_A = Color(0.22, 0.42, 0.85, 0.85)
 const COLOR_B = Color(0.78, 0.2, 0.14, 0.85)
-const ACTION_PANEL_SIZE = Vector2(800, 550)
 
 var game_manager = null
 
@@ -24,9 +23,6 @@ var _last_ui_key: String = ""
 var _resolved_animated: bool = false
 
 func _ready() -> void:
-	# Keep all action-phase panels at a consistent footprint.
-	custom_minimum_size = ACTION_PANEL_SIZE
-	size = ACTION_PANEL_SIZE
 	clip_contents = true
 
 	var margin = MarginContainer.new()
@@ -257,7 +253,7 @@ func _build_input_controls(state) -> void:
 		_draft_amount = 0
 
 	var title = Label.new()
-	title.text = "Player %d: cast your treasury vote" % player_id
+	title.text = "Player %d: cast your treasury vote" % (player_id + 1)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", COLOR_GOLD)
 	title.add_theme_font_size_override("font_size", 20)

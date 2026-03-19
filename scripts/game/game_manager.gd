@@ -7,7 +7,7 @@ const Role = preload("res://scripts/data/role.gd").Role
 const Player = preload("res://scripts/data/player.gd")
 const Policy = preload("res://scripts/data/policy.gd")
 const GameState = preload("res://scripts/data/game_state.gd")
-static var influence_to_win: int = 5
+static var influence_to_win: int = 7
 static var last_winner_text: String = ""
 static var last_patrician_influence: int = 0
 static var last_plebian_influence: int = 0
@@ -234,7 +234,7 @@ func distribute_money():
 
 func print_current_consul():
 	var p = state.players[state.current_consul_index]
-	print("Consul is player %d (%s)" % [p.player_id, role_name(p.role)])
+	print("Consul is player %d (%s)" % [p.player_id + 1, role_name(p.role)])
 	print("Current phase: %s" % state.game_phase)
 
 func next_consul():
@@ -268,7 +268,7 @@ func select_election_nominee(nominee_index: int) -> bool:
 	state.election_votes_no.clear()
 	for i in range(state.election_vote_inputs.size()):
 		state.election_vote_inputs[i] = -1
-	print("Consul selected nominee player %d" % nominee_index)
+	print("Consul selected nominee player %d" % (nominee_index + 1))
 	return true
 
 func set_election_vote(player_id: int, is_yes: bool) -> bool:

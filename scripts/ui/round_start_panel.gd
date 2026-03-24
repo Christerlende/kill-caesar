@@ -5,15 +5,16 @@ const Role = preload("res://scripts/data/role.gd").Role
 const COLOR_GOLD = Color(0.95, 0.82, 0.25, 1)
 const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
 const COLOR_DIM = Color(0.6, 0.55, 0.45, 0.7)
+const AUTO_ADVANCE_DELAY: float = 2.0
 
 var game_manager = null
 
 var _round_label: Label
 var _flavor_label: Label
 var _consul_label: Label
-var _continue_button: Button
 var _animation_played: bool = false
 var _last_flavor_index: int = -1
+var _sequence_id: int = 0
 
 const FIRST_ROUND_TEXT: String = "A senator rises to claim the mantle of consul."
 
@@ -72,39 +73,9 @@ func _ready() -> void:
 	_consul_label.add_theme_color_override("font_color", COLOR_GOLD)
 	vbox.add_child(_consul_label)
 
-	_continue_button = Button.new()
-	_continue_button.text = "Proceed"
-	_continue_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_continue_button.visible = false
-	_continue_button.pressed.connect(_on_continue_pressed)
-	_continue_button.add_theme_color_override("font_color", COLOR_CREAM)
-	_continue_button.add_theme_color_override("font_focus_color", COLOR_CREAM)
-	_continue_button.add_theme_color_override("font_hover_color", COLOR_CREAM)
-	_continue_button.add_theme_color_override("font_pressed_color", COLOR_CREAM)
-	var cs = StyleBoxFlat.new()
-	cs.bg_color = Color(0.14, 0.62, 0.18, 0.95)
-	cs.border_width_left = 1
-	cs.border_width_top = 1
-	cs.border_width_right = 1
-	cs.border_width_bottom = 1
-	cs.border_color = Color(0.78, 0.9, 0.78, 0.7)
-	cs.corner_radius_top_left = 6
-	cs.corner_radius_top_right = 6
-	cs.corner_radius_bottom_left = 6
-	cs.corner_radius_bottom_right = 6
-	cs.content_margin_left = 16
-	cs.content_margin_right = 16
-	cs.content_margin_top = 8
-	cs.content_margin_bottom = 8
-	_continue_button.add_theme_stylebox_override("normal", cs)
-	_continue_button.add_theme_stylebox_override("focus", cs)
-	_continue_button.add_theme_stylebox_override("pressed", cs)
-	_continue_button.add_theme_stylebox_override("hover", cs)
-	vbox.add_child(_continue_button)
-
 func show_round(round_number: int, consul_name: String) -> void:
+	_sequence_id += 1
 	_animation_played = false
-	_continue_button.visible = false
 
 	_round_label.text = "Round %d" % round_number
 
@@ -124,9 +95,9 @@ func show_round(round_number: int, consul_name: String) -> void:
 	_flavor_label.modulate = Color(1, 1, 1, 0)
 	_consul_label.modulate = Color(1, 1, 1, 0)
 
-	_play_entrance_animation()
+	_play_entrance_animation(_sequence_id)
 
-func _play_entrance_animation() -> void:
+func _play_entrance_animation(sequence_id: int) -> void:
 	if _animation_played:
 		return
 	_animation_played = true
@@ -140,20 +111,19 @@ func _play_entrance_animation() -> void:
 	# Pause then consul name
 	tween.tween_interval(0.4)
 	tween.tween_property(_consul_label, "modulate:a", 1.0, 0.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	# Pause then show button
-	tween.tween_interval(1.0)
-	tween.tween_callback(_show_button)
+	# Auto-progress to election shortly after consul reveal
+	tween.tween_interval(AUTO_ADVANCE_DELAY)
+	tween.tween_callback(_auto_advance.bind(sequence_id))
 
-func _show_button() -> void:
-	_continue_button.visible = true
-	_continue_button.modulate = Color(1, 1, 1, 0)
-	var tween = create_tween()
-	tween.tween_property(_continue_button, "modulate:a", 1.0, 0.4).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+func _auto_advance(sequence_id: int) -> void:
+	if sequence_id != _sequence_id:
+		return
+	if not game_manager or not game_manager.state:
+		return
+	if game_manager.state.game_phase != "round_start":
+		return
+	game_manager.progress()
 
 func reset_panel() -> void:
+	_sequence_id += 1
 	_animation_played = false
-	_continue_button.visible = false
-
-func _on_continue_pressed() -> void:
-	if game_manager:
-		game_manager.progress()

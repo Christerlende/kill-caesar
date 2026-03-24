@@ -7,7 +7,7 @@ const Role = preload("res://scripts/data/role.gd").Role
 const Player = preload("res://scripts/data/player.gd")
 const Policy = preload("res://scripts/data/policy.gd")
 const GameState = preload("res://scripts/data/game_state.gd")
-static var influence_to_win: int = 1
+static var influence_to_win: int = 7
 static var last_winner_text: String = ""
 static var last_patrician_influence: int = 0
 static var last_plebian_influence: int = 0
@@ -483,7 +483,6 @@ func resolve_spending_totals() -> void:
 	state.spending_stage = "resolved"
 
 func check_win_condition() -> void:
-	print("[check_win] patrician=%d plebian=%d target=%d game_over_handled=%s" % [state.influence_patrician, state.influence_plebian, influence_to_win, _game_over_handled])
 	if _game_over_handled:
 		return
 	if state.influence_patrician >= influence_to_win:
@@ -557,10 +556,8 @@ func _record_round_history() -> void:
 	state.round_history.push_front(entry)
 
 func progress():
-	print("[progress] called while game_phase=%s, game_over_handled=%s" % [state.game_phase, _game_over_handled])
 	# Global guard: never advance if game is already over
 	if _game_over_handled:
-		print("[progress] BLOCKED — game is over (phase=%s)" % state.game_phase)
 		return
 	match state.game_phase:
 		"init":

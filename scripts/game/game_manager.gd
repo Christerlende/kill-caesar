@@ -7,14 +7,16 @@ const Role = preload("res://scripts/data/role.gd").Role
 const Player = preload("res://scripts/data/player.gd")
 const Policy = preload("res://scripts/data/policy.gd")
 const GameState = preload("res://scripts/data/game_state.gd")
-static var influence_to_win: int = 5
+static var influence_to_win: int = 1
 static var last_winner_text: String = ""
 static var last_patrician_influence: int = 0
 static var last_plebian_influence: int = 0
 static var last_round_number: int = 0
+static var last_player_roles: Array = []  # [{player_id, role, role_name}]
 
 @onready var state: GameState = GameState.new()
 var pending_policy_choices: Array = []
+var _discarded_policy_objects: Array = []
 var policy_discard_stage: String = ""
 var _game_over_handled: bool = false
 
@@ -219,7 +221,7 @@ func start_round():
 	state.spending_input_player_index = -1
 	state.spending_private_inputs.clear()
 	state.spending_confirmed_players.clear()
-	state.game_phase = "election"
+	state.game_phase = "round_start"
 	print_current_consul()
 
 func distribute_money():
@@ -234,7 +236,7 @@ func distribute_money():
 
 func print_current_consul():
 	var p = state.players[state.current_consul_index]
-	print("Consul is player %d (%s)" % [p.player_id, role_name(p.role)])
+	print("Consul is player %d (%s)" % [p.player_id + 1, role_name(p.role)])
 	print("Current phase: %s" % state.game_phase)
 
 func next_consul():
@@ -244,7 +246,7 @@ func next_consul():
 		p.is_consul = false
 		p.is_co_consul = false
 	state.players[state.current_consul_index].is_consul = true
-	state.game_phase = "election"
+	state.game_phase = "round_start"
 	print_current_consul()
 
 # --- new functionality added below ---
@@ -268,7 +270,7 @@ func select_election_nominee(nominee_index: int) -> bool:
 	state.election_votes_no.clear()
 	for i in range(state.election_vote_inputs.size()):
 		state.election_vote_inputs[i] = -1
-	print("Consul selected nominee player %d" % nominee_index)
+	print("Consul selected nominee player %d" % (nominee_index + 1))
 	return true
 
 func set_election_vote(player_id: int, is_yes: bool) -> bool:
@@ -329,6 +331,7 @@ func conduct_election() -> bool:
 
 func start_policy_phase() -> void:
 	pending_policy_choices.clear()
+	_discarded_policy_objects.clear()
 	state.policy_drawn_ids.clear()
 	state.policy_discarded_ids.clear()
 	state.policy_enacted = null
@@ -339,6 +342,9 @@ func start_policy_phase() -> void:
 			state.policy_drawn_ids.append(p.id)
 	if pending_policy_choices.size() <= 1:
 		enact_remaining_policy()
+		# No discard choices needed — skip straight to spending
+		state.game_phase = "spending"
+		start_spending_phase()
 		return
 	policy_discard_stage = "consul"
 	print("Policy phase started. Drawn policy IDs:", state.policy_drawn_ids)
@@ -365,6 +371,8 @@ func discard_policy_by_id(policy_id: int) -> bool:
 	if found_index == -1:
 		return false
 	state.policy_discarded_ids.append(policy_id)
+	# Save the discarded policy object so it can be returned to the deck
+	_discarded_policy_objects.append(pending_policy_choices[found_index])
 	pending_policy_choices.remove_at(found_index)
 	if pending_policy_choices.size() <= 1:
 		enact_remaining_policy()
@@ -381,20 +389,12 @@ func enact_remaining_policy() -> void:
 	state.policy_enacted = pending_policy_choices[0]
 	pending_policy_choices.clear()
 	policy_discard_stage = "done"
-	print("Final enacted policy %d" % state.policy_enacted.id)
-	apply_policy(state.policy_enacted)
-
-func policy_cycle():
-	# kept for compatibility; policy flow is now interactive via start_policy_phase/discard_policy_by_id
-	start_policy_phase()
-
-func apply_policy(p: Policy) -> void:
-	if p.faction == Role.PATRICIAN:
-		state.influence_patrician += 1
-	else:
-		state.influence_plebian += 1
-	print("Applied policy %d (faction %d)" % [p.id, p.faction])
-	check_win_condition()
+	# Return discarded policies to the deck and shuffle
+	for p in _discarded_policy_objects:
+		state.all_policies.append(p)
+	_discarded_policy_objects.clear()
+	state.all_policies.shuffle()
+	print("Final enacted policy %d (returned %d policies to deck)" % [state.policy_enacted.id, state.policy_discarded_ids.size()])
 
 func start_spending_phase() -> void:
 	if state.policy_enacted == null:
@@ -432,7 +432,15 @@ func set_spending_allocation(option_key: String, spend_amount: int) -> bool:
 		return false
 	state.spending_private_inputs[player_id] = {"option": option_key, "amount": spend_amount}
 	state.spending_confirmed_players[player_id] = true
-	state.spending_stage = "handoff"
+	# Auto-advance to the next player (or resolve totals) to avoid extra handoff clicks.
+	var next_player = state.spending_input_player_index + 1
+	while next_player < state.players.size() and state.spending_confirmed_players[next_player]:
+		next_player += 1
+	if next_player >= state.players.size():
+		resolve_spending_totals()
+	else:
+		state.spending_input_player_index = next_player
+		state.spending_stage = "input"
 	print("Player %d spending captured privately." % player_id)
 	return true
 
@@ -470,14 +478,12 @@ func resolve_spending_totals() -> void:
 	print("Money vote totals A:%d B:%d" % [total_a, total_b])
 	if total_a >= total_b:
 		state.spending_winner = "A"
-		apply_benefit(state.policy_enacted.option_a_beneficiary, state.policy_enacted.option_a_gold_amount)
 	else:
 		state.spending_winner = "B"
-		apply_benefit(state.policy_enacted.option_b_beneficiary, state.policy_enacted.option_b_gold_amount)
 	state.spending_stage = "resolved"
-	check_win_condition()
 
 func check_win_condition() -> void:
+	print("[check_win] patrician=%d plebian=%d target=%d game_over_handled=%s" % [state.influence_patrician, state.influence_plebian, influence_to_win, _game_over_handled])
 	if _game_over_handled:
 		return
 	if state.influence_patrician >= influence_to_win:
@@ -486,29 +492,80 @@ func check_win_condition() -> void:
 		last_patrician_influence = state.influence_patrician
 		last_plebian_influence = state.influence_plebian
 		last_round_number = state.round_number
+		_store_player_roles()
 		_game_over_handled = true
 		print("Patricians win! Influence reached %d" % state.influence_patrician)
-		get_tree().change_scene_to_file("res://scenes/ui/end_game.tscn")
 	elif state.influence_plebian >= influence_to_win:
 		state.game_phase = "game_over"
 		last_winner_text = "Plebeians"
 		last_patrician_influence = state.influence_patrician
 		last_plebian_influence = state.influence_plebian
 		last_round_number = state.round_number
+		_store_player_roles()
 		_game_over_handled = true
 		print("Plebeians win! Influence reached %d" % state.influence_plebian)
-		get_tree().change_scene_to_file("res://scenes/ui/end_game.tscn")
+
+func _store_player_roles() -> void:
+	last_player_roles.clear()
+	for p in state.players:
+		last_player_roles.append({
+			"player_id": p.player_id,
+			"role": p.role,
+			"role_name": role_name(p.role),
+		})
+
+func apply_enacted_decree_effect(policy: Policy, option_key: String) -> void:
+	if policy == null:
+		return
+	match policy.id:
+		1:
+			if option_key == "A":
+				apply_benefit(Role.PLEBIAN, 2)
+			else:
+				apply_benefit(Role.PATRICIAN, 4)
+		_:
+			if option_key == "A":
+				apply_benefit(policy.option_a_beneficiary, policy.option_a_gold_amount)
+			else:
+				apply_benefit(policy.option_b_beneficiary, policy.option_b_gold_amount)
 
 func apply_benefit(faction: int, amount: int) -> void:
 	for pl in state.players:
-		if pl.role == faction and not (faction == Role.PATRICIAN and pl.role == Role.CAESAR):
+		if pl.role == faction:
 			pl.money += amount
 	print("Applied benefit %d gold to faction %d" % [amount, faction])
 
+func apply_policy_influence(policy: Policy) -> void:
+	if policy == null:
+		return
+	if policy.faction == Role.PATRICIAN:
+		state.influence_patrician += 1
+	else:
+		state.influence_plebian += 1
+	print("Applied influence for policy %d (faction %d)" % [policy.id, policy.faction])
+
+func _record_round_history() -> void:
+	var consul_name = "Player %d" % (state.current_consul_index + 1)
+	var co_consul_name = "Player %d" % (state.current_co_consul_index + 1) if state.current_co_consul_index >= 0 else "None"
+	var faction = "Plebeian" if state.policy_enacted != null and state.policy_enacted.faction == Role.PLEBIAN else "Patrician"
+	var entry = {
+		"round_number": state.round_number,
+		"faction": faction,
+		"consul_name": consul_name,
+		"co_consul_name": co_consul_name,
+	}
+	state.round_history.push_front(entry)
+
 func progress():
+	print("[progress] called while game_phase=%s, game_over_handled=%s" % [state.game_phase, _game_over_handled])
+	# Global guard: never advance if game is already over
+	if _game_over_handled:
+		print("[progress] BLOCKED — game is over (phase=%s)" % state.game_phase)
+		return
 	match state.game_phase:
 		"init":
 			start_round()
+		"round_start":
 			state.game_phase = "election"
 		"election":
 			if state.election_nominee_index < 0:
@@ -538,7 +595,14 @@ func progress():
 			if state.spending_stage != "resolved":
 				print("Complete private spending for all players first")
 				return
-			state.game_phase = "round_end"
+			state.game_phase = "result"
+			_record_round_history()
+		"result":
+			# Effects are now applied by the result panel during fade-in animations.
+			# Just check win condition and advance phase.
+			check_win_condition()
+			if state.game_phase != "game_over":
+				state.game_phase = "round_end"
 		"round_end":
 			next_consul()
 			start_round()

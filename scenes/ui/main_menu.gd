@@ -25,7 +25,7 @@ func _on_play_button_pressed() -> void:
 
 func _on_test_match_button_pressed() -> void:
 	print("Starting test match")
-	GameManager.influence_to_win = 2
+	GameManager.influence_to_win = 1
 	start_game_pressed.emit()
 	get_tree().change_scene_to_file("res://scenes/game.tscn")
 

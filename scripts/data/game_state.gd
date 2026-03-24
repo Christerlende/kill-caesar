@@ -35,6 +35,10 @@ var spending_input_player_index: int = -1
 var spending_private_inputs: Array = []  # [{"option": "A"|"B", "amount": int}, ...]
 var spending_confirmed_players: Array = []  # bool per player
 
+# Round history for result screen (newest first)
+# Each entry: {round_number, faction, consul_name, co_consul_name}
+var round_history: Array = []
+
 func _init():
     players = []
     all_policies = []

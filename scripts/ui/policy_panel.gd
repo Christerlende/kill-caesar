@@ -47,7 +47,7 @@ func _ready():
 	margin.add_child(root_vbox)
 
 	# Header
-	_header_label = _make_label("POLICY DECREE", 30, COLOR_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
+	_header_label = _make_label("REMOVE A POLICY", 30, COLOR_GOLD, HORIZONTAL_ALIGNMENT_CENTER)
 	root_vbox.add_child(_header_label)
 	root_vbox.add_child(HSeparator.new())
 

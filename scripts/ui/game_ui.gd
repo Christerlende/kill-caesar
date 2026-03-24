@@ -28,6 +28,8 @@ var _round_transition_time_left: float = 0.0
 var election_panel = null
 var policy_panel = null
 var spending_panel = null
+var result_panel = null
+var round_start_panel = null
 var info_panel = null
 
 const ACTION_PANEL_OFFSET_LEFT: float = 375.0
@@ -128,6 +130,20 @@ func _ready():
 		spending_panel.game_manager = game_manager
 		_apply_action_panel_frame(spending_panel)
 		spending_panel.visible = false
+
+	# connect result panel
+	result_panel = get_node_or_null("ResultPanel")
+	if result_panel:
+		result_panel.game_manager = game_manager
+		_apply_action_panel_frame(result_panel)
+		result_panel.visible = false
+
+	# connect round start panel (full screen overlay)
+	round_start_panel = get_node_or_null("RoundStartPanel")
+	if round_start_panel:
+		round_start_panel.game_manager = game_manager
+		_apply_action_panel_frame(round_start_panel)
+		round_start_panel.visible = false
 
 	# connect info panel (left sidebar)
 	info_panel = get_node_or_null("InfoPanel")
@@ -230,6 +246,8 @@ func _process(_delta):
 		_apply_action_panel_frame(policy_panel)
 	if spending_panel:
 		_apply_action_panel_frame(spending_panel)
+	if result_panel:
+		_apply_action_panel_frame(result_panel)
 	# Toggle election panel vs legacy debug controls
 	var in_election = state.game_phase == "election"
 	var election_transition_active = false
@@ -271,6 +289,24 @@ func _process(_delta):
 			spending_panel.reset_panel()
 	if spending_controls_container:
 		spending_controls_container.visible = not in_spending
+
+	# Toggle result panel (keep visible during game_over so victory transition completes)
+	var in_result = state.game_phase == "result" or state.game_phase == "game_over"
+	if result_panel:
+		result_panel.visible = in_result
+		if not in_result:
+			result_panel.reset_panel()
+
+	# Toggle round start panel (full screen overlay)
+	var in_round_start = state.game_phase == "round_start"
+	if round_start_panel:
+		if in_round_start and not round_start_panel.visible:
+			var consul = state.players[state.current_consul_index]
+			var consul_name = "Player %d (%s)" % [consul.player_id + 1, game_manager.role_name(consul.role)]
+			round_start_panel.show_round(state.round_number, consul_name)
+		round_start_panel.visible = in_round_start
+		if not in_round_start:
+			round_start_panel.reset_panel()
 
 	_update_nominee_buttons(state)
 	_update_election_vote_buttons(state)

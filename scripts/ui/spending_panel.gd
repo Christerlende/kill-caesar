@@ -8,6 +8,8 @@ const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
 const COLOR_DIM = Color(0.6, 0.55, 0.45, 0.8)
 const COLOR_A = Color(0.22, 0.42, 0.85, 0.85)
 const COLOR_B = Color(0.78, 0.2, 0.14, 0.85)
+const COLOR_PARCHMENT = Color(0.85, 0.75, 0.58, 1)
+const COLOR_PARCHMENT_TEXT = Color(0.2, 0.15, 0.08, 1)
 
 var game_manager = null
 
@@ -158,7 +160,7 @@ func _build_option_card(letter: String, text: String, accent: Color, state, resu
 	card.custom_minimum_size = Vector2(300, 250)
 	card.clip_contents = true
 
-	var bg_color = Color(0.16, 0.08, 0.06, 0.95)
+	var bg_color = COLOR_PARCHMENT
 	var border_color = accent
 	var border_width = 2
 	if is_loser:
@@ -192,14 +194,14 @@ func _build_option_card(letter: String, text: String, accent: Color, state, resu
 	header.text = "Decree %s" % _decree_number_from_option_key(letter)
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_theme_font_size_override("font_size", 20 if is_winner else 18)
-	header.add_theme_color_override("font_color", border_color)
+	header.add_theme_color_override("font_color", border_color if not is_loser else Color(0.55, 0.55, 0.55, 0.9))
 	box.add_child(header)
 
 	var body = Label.new()
 	body.text = text
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	body.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1) if is_loser else COLOR_CREAM)
+	body.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45, 1) if is_loser else COLOR_PARCHMENT_TEXT)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(body)
 
@@ -223,7 +225,7 @@ func _build_option_card(letter: String, text: String, accent: Color, state, resu
 		amount_label.text = str(shown_amount) if shown_amount > 0 else ""
 		amount_label.custom_minimum_size = Vector2(24, 0)
 		amount_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		amount_label.add_theme_color_override("font_color", COLOR_GOLD)
+		amount_label.add_theme_color_override("font_color", COLOR_PARCHMENT_TEXT)
 		control_row.add_child(amount_label)
 
 		var plus_btn = Button.new()
@@ -267,9 +269,8 @@ func _build_input_controls(state) -> void:
 	_controls_box.add_child(spend_label)
 
 	var pay_btn = Button.new()
-	pay_btn.text = "Render Tribute"
+	pay_btn.text = "Skip Tribute" if _draft_amount == 0 else "Render Tribute"
 	pay_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	pay_btn.disabled = _draft_amount <= 0
 	pay_btn.pressed.connect(_on_pay_pressed)
 	_controls_box.add_child(pay_btn)
 
@@ -318,8 +319,6 @@ func _on_pass_pressed() -> void:
 
 func _on_resolved_proceed_pressed() -> void:
 	game_manager.progress()
-	if game_manager.state.game_phase == "round_end":
-		game_manager.progress()
 	_last_ui_key = ""
 
 func _decree_number_from_option_key(option_key: String) -> String:

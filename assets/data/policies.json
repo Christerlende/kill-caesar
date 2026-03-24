@@ -1,0 +1,197 @@
+[
+  {
+    "id": 1,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Each Plebeian gains 2 gold",
+      "beneficiary": "plebeian",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "plebeian", "amount": 2 },
+      "result_text": "At dawn, grain carts entered the crowded districts and the ledgers were opened. By Senate decree, Plebeian households received fresh coin, and the alleys rang with rare relief.\nPlebeian representatives +2 gold."
+    },
+    "option_b": {
+      "text": "Each Patrician (except Caesar) gains 4 gold",
+      "beneficiary": "patrician",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "patrician", "amount": 4 },
+      "result_text": "Under torchlight, sealed purses were carried to Patrician villas. Gold favored old blood and noble names, while Caesar stood apart and watched the balance tilt.\nPatrician representatives +4 gold."
+    }
+  },
+  {
+    "id": 2,
+    "faction": "patrician",
+    "option_a": {
+      "text": "A random Plebeian representative receives 1 assassination token",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_assassination_token",
+      "effect_params": { "target_role": "plebeian" },
+      "result_text": "Beneath the Forum and beyond magistrates' eyes, a Plebeian envoy met in shadow. They emerged with a sealed token, and whispers spread that a cloaked blade now served their call.\n+1 Ass. token given to a random Plebeian."
+    },
+    "option_b": {
+      "text": "All players pay 3 gold toward civic repairs",
+      "beneficiary": "patrician",
+      "effect_type": "tax_all",
+      "effect_params": { "amount": 3 },
+      "result_text": "The Colosseum's outer stone has cracked, and engineers warned of ruin if repairs were delayed. Heralds went door to door, and every citizen was compelled to surrender 3 gold.\nAll players lose 3 gold."
+    }
+  },
+  {
+    "id": 3,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Caesar gains an assassination token",
+      "beneficiary": "caesar",
+      "effect_type": "grant_assassination_token",
+      "effect_params": { "target_role": "caesar" },
+      "result_text": "In the palace's inner chambers, Caesar received a hooded visitor who spoke no name. A sealed token was pressed into his hand — with it, the authority to silence one voice permanently. By morning, the guards had changed their routes.\nAss. token given to Caesar."
+    },
+    "option_b": {
+      "text": "A random Plebeian gains an assassination token and each Plebeian gains 2 gold",
+      "beneficiary": "plebeian",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "grant_assassination_token", "params": { "target_role": "plebeian" } },
+          { "effect_type": "gold_by_role", "params": { "role": "plebeian", "amount": 2 } }
+        ]
+      },
+      "result_text": "The Plebeian quarters stirred with new purpose. Coin flowed from sympathetic merchants, and in a wine-stained back room, a dagger was wrapped in cloth and passed to trembling hands. The common folk were done waiting.\n+1 Ass. token given to a random Plebeian. Plebeian representatives +2 gold."
+    }
+  },
+  {
+    "id": 4,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Each Patrician gains 3 gold from eastern trade routes",
+      "beneficiary": "patrician",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "patrician", "amount": 3 },
+      "result_text": "Silk caravans arrived through the eastern gates, and Patrician merchants collected their shares first. The warehouses swelled with goods, and old families counted new fortunes behind marble walls.\nPatrician representatives +3 gold."
+    },
+    "option_b": {
+      "text": "All players pay 2 gold in harbor tariffs",
+      "beneficiary": "patrician",
+      "effect_type": "tax_all",
+      "effect_params": { "amount": 2 },
+      "result_text": "New tariffs were posted at every dock and gate. Merchants grumbled, soldiers collected, and the treasury grew heavier while purses across the city grew thin.\nAll players lose 2 gold."
+    }
+  },
+  {
+    "id": 5,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Each Plebeian gains 3 gold from labor contracts",
+      "beneficiary": "plebeian",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "plebeian", "amount": 3 },
+      "result_text": "New construction on the Via Appia demanded hands by the thousand. Plebeian laborers were paid fairly for once, and the foremen's ledgers showed honest coin beside calloused names.\nPlebeian representatives +3 gold."
+    },
+    "option_b": {
+      "text": "A random Patrician receives an assassination token",
+      "beneficiary": "patrician",
+      "effect_type": "grant_assassination_token",
+      "effect_params": { "target_role": "patrician" },
+      "result_text": "A restless Patrician met with foreign agents beyond the city walls. What was exchanged is unknown, but a sealed token now rests in noble hands, and certain senators have begun sleeping behind locked doors.\n+1 Ass. token given to a random Patrician."
+    }
+  },
+  {
+    "id": 6,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Caesar gains 6 gold from military tributes",
+      "beneficiary": "caesar",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "caesar", "amount": 6 },
+      "result_text": "Legions returning from the frontier marched through the Forum bearing chests of plundered silver. Caesar claimed his share before the Senate could speak — as was his right, he said, and none dared challenge it.\nCaesar +6 gold."
+    },
+    "option_b": {
+      "text": "Each Patrician gains 2 gold and all players pay 2 gold in war levies",
+      "beneficiary": "patrician",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "gold_by_role", "params": { "role": "patrician", "amount": 2 } },
+          { "effect_type": "tax_all", "params": { "amount": 2 } }
+        ]
+      },
+      "result_text": "The Senate voted to fund a new campaign along the Rhine. Every household owed a levy to the war effort, though Patrician families quietly received stipends for their 'administrative contributions' to the cause.\nPatrician representatives +2 gold. All players lose 2 gold."
+    }
+  },
+  {
+    "id": 7,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "All players pay 4 gold for public games",
+      "beneficiary": "plebeian",
+      "effect_type": "tax_all",
+      "effect_params": { "amount": 4 },
+      "result_text": "The Ludi Romani were declared with such grandeur that even senators winced at the cost. Gladiators fought, chariots raced, and the crowd roared — but every citizen paid dearly for the spectacle.\nAll players lose 4 gold."
+    },
+    "option_b": {
+      "text": "Each Plebeian gains 4 gold from festival earnings",
+      "beneficiary": "plebeian",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "plebeian", "amount": 4 },
+      "result_text": "Street vendors, performers, and craftsmen thrived as festival-goers spent freely. For once, gold flowed downward — from marble steps to mud-packed streets — and Plebeian hands caught every coin.\nPlebeian representatives +4 gold."
+    }
+  },
+  {
+    "id": 8,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Each Patrician gains 5 gold from land seizures",
+      "beneficiary": "patrician",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "patrician", "amount": 5 },
+      "result_text": "Disputed farmlands outside the city were awarded to Patrician families by senatorial decree. Tenants were evicted, boundaries redrawn, and the rents began flowing before the ink had dried.\nPatrician representatives +5 gold."
+    },
+    "option_b": {
+      "text": "A random Plebeian receives an assassination token",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_assassination_token",
+      "effect_params": { "target_role": "plebeian" },
+      "result_text": "Anger over the Senate's greed reached a boiling point in the lower quarters. A hooded figure was seen leaving a Plebeian dwelling at dawn, and now someone among the common folk carries a dark commission.\n+1 Ass. token given to a random Plebeian."
+    }
+  },
+  {
+    "id": 9,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Each Plebeian gains 2 gold and a random Patrician receives an assassination token",
+      "beneficiary": "plebeian",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "gold_by_role", "params": { "role": "plebeian", "amount": 2 } },
+          { "effect_type": "grant_assassination_token", "params": { "target_role": "patrician" } }
+        ]
+      },
+      "result_text": "The People's Tribune rallied the lower wards with promises of justice and coin. Plebeian households received their share, but in the shadows, a Patrician was handed a sealed token — the Tribune's insurance against betrayal.\nPlebeian representatives +2 gold. +1 Ass. token given to a random Patrician."
+    },
+    "option_b": {
+      "text": "All players pay 3 gold for aqueduct repairs",
+      "beneficiary": "patrician",
+      "effect_type": "tax_all",
+      "effect_params": { "amount": 3 },
+      "result_text": "Cracks in the great aqueduct threatened the city's water supply. Engineers demanded immediate funding, and the Senate compelled every citizen to contribute — no exceptions, no deferrals.\nAll players lose 3 gold."
+    }
+  },
+  {
+    "id": 10,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Caesar gains an assassination token",
+      "beneficiary": "caesar",
+      "effect_type": "grant_assassination_token",
+      "effect_params": { "target_role": "caesar" },
+      "result_text": "Whispers reached the palace of a conspiracy among senators. Caesar, ever cautious, summoned his own agents. By nightfall a sealed token was in his possession — not for defense, he said, but for order.\nAss. token given to Caesar."
+    },
+    "option_b": {
+      "text": "Each Patrician gains 4 gold from provincial taxes",
+      "beneficiary": "patrician",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "patrician", "amount": 4 },
+      "result_text": "Tax collectors returned from the provinces bearing heavy coffers. The Senate divided the spoils among its own, and Patrician vaults deepened while distant villages tightened their belts.\nPatrician representatives +4 gold."
+    }
+  }
+]

@@ -16,6 +16,7 @@ var _role_title_label: Label
 var _purse_amount_label: Label
 var _income_label: Label
 var _intel_section: VBoxContainer
+var _lower_content_section: VBoxContainer
 var _rules_popup: PanelContainer
 var _howtowin_popup: PanelContainer
 
@@ -65,6 +66,12 @@ func _ready() -> void:
 	var spacer = Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(spacer)
+
+	# --- Lower sidebar content ---
+	_lower_content_section = VBoxContainer.new()
+	_lower_content_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_lower_content_section.add_theme_constant_override("separation", 8)
+	root.add_child(_lower_content_section)
 
 	# --- Scroll Buttons ---
 	var scroll_row = HBoxContainer.new()
@@ -349,6 +356,15 @@ func _update_intel(state, player) -> void:
 			hint.add_theme_font_size_override("font_size", 14)
 			hint.add_theme_color_override("font_color", COLOR_DIM)
 			_intel_section.add_child(hint)
+
+func set_lower_sidebar_panel(panel: Control) -> void:
+	if not _lower_content_section or not panel:
+		return
+	if panel.get_parent():
+		panel.get_parent().remove_child(panel)
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	_lower_content_section.add_child(panel)
 
 # --- Hover Popup Callbacks ---
 

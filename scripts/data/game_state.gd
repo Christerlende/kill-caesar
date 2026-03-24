@@ -39,6 +39,9 @@ var spending_confirmed_players: Array = []  # bool per player
 # Each entry: {round_number, faction, consul_name, co_consul_name}
 var round_history: Array = []
 
+# Assassination tokens system
+var active_assassination_tokens: Array = []  # Array of AssassinationToken objects
+
 func _init():
     players = []
     all_policies = []

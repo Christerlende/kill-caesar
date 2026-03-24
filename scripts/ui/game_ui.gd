@@ -31,6 +31,7 @@ var spending_panel = null
 var result_panel = null
 var round_start_panel = null
 var info_panel = null
+var assassination_tokens_panel = null
 var _was_election_panel_active: bool = false
 var _was_policy_panel_active: bool = false
 var _was_spending_panel_active: bool = false
@@ -154,6 +155,16 @@ func _ready():
 	info_panel = get_node_or_null("InfoPanel")
 	if info_panel:
 		info_panel.game_manager = game_manager
+
+	# create assassination tokens panel (dynamically)
+	assassination_tokens_panel = preload("res://scripts/ui/assassination_tokens_panel.gd").new()
+	assassination_tokens_panel.game_manager = game_manager
+	assassination_tokens_panel.set_viewing_player(0)  # Default to player 0, updated per turn
+	assassination_tokens_panel.visible = false
+	if info_panel and info_panel.has_method("set_lower_sidebar_panel"):
+		info_panel.set_lower_sidebar_panel(assassination_tokens_panel)
+	else:
+		add_child(assassination_tokens_panel)
 
 	# hide legacy bottom info panel
 	var hidden_info_panel = get_node_or_null("HiddenInfoPanel")
@@ -301,6 +312,10 @@ func _process(_delta):
 	# Toggle result panel (keep visible during game_over so victory transition completes)
 	var in_result = state.game_phase == "result" or state.game_phase == "game_over"
 	if result_panel:
+		var result_viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
+		if state.game_phase == "result" and state.spending_input_player_index >= 0:
+			result_viewer_index = clamp(state.spending_input_player_index, 0, state.players.size() - 1)
+		result_panel.set_viewing_player(result_viewer_index)
 		result_panel.visible = in_result
 		if _was_result_panel_active and not in_result:
 			result_panel.reset_panel()
@@ -317,6 +332,15 @@ func _process(_delta):
 		if _was_round_start_panel_active and not in_round_start:
 			round_start_panel.reset_panel()
 	_was_round_start_panel_active = in_round_start
+
+	# Toggle assassination tokens panel in the sidebar during active play, round start, and result
+	var in_assassination_mode = state.game_phase in ["round_start", "election", "policy", "spending", "result"]
+	if assassination_tokens_panel:
+		var assassination_viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
+		if state.game_phase in ["spending", "result"] and state.spending_input_player_index >= 0:
+			assassination_viewer_index = clamp(state.spending_input_player_index, 0, state.players.size() - 1)
+		assassination_tokens_panel.set_viewing_player(assassination_viewer_index)
+		assassination_tokens_panel.visible = in_assassination_mode
 
 	_update_nominee_buttons(state)
 	_update_election_vote_buttons(state)

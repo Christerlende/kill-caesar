@@ -25,6 +25,8 @@ var _influence_applied: bool = false
 var _decree_applied: bool = false
 var _influence_item: Label = null
 var _decree_item: Label = null
+var _threat_item: Label = null
+var _viewing_player_id: int = -1
 
 func _ready() -> void:
 	clip_contents = true
@@ -113,7 +115,7 @@ func _process(_delta: float) -> void:
 	if not state or state.game_phase != "result":
 		return
 
-	var ui_key = "result|%d" % state.round_history.size()
+	var ui_key = "result|%d|%d" % [state.round_history.size(), _viewing_player_id]
 	if ui_key == _last_ui_key:
 		return
 	_last_ui_key = ui_key
@@ -130,11 +132,18 @@ func reset_panel() -> void:
 	_decree_applied = false
 	_influence_item = null
 	_decree_item = null
+	_threat_item = null
 	_continue_button.visible = false
 	for child in _history_list.get_children():
 		child.queue_free()
 	for child in _right_box.get_children():
 		child.queue_free()
+
+func set_viewing_player(player_id: int) -> void:
+	if _viewing_player_id == player_id:
+		return
+	_viewing_player_id = player_id
+	_last_ui_key = ""
 
 func _start_fade_in_sequence(state) -> void:
 	_animation_started = true
@@ -155,7 +164,7 @@ func _start_fade_in_sequence(state) -> void:
 	_influence_item.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_influence_item.modulate = Color(1, 1, 1, 0)
 	_right_box.add_child(_influence_item)
-	items.append(_influence_item)
+	items.append({"node": _influence_item, "kind": "influence"})
 
 	# Item 2: Decree result text (if policy enacted)
 	if policy != null:
@@ -174,32 +183,58 @@ func _start_fade_in_sequence(state) -> void:
 			_decree_item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			_decree_item.modulate = Color(1, 1, 1, 0)
 			_right_box.add_child(_decree_item)
-			items.append(_decree_item)
+			items.append({"node": _decree_item, "kind": "decree"})
+
+	var assassination_message = _build_private_assassination_message(state)
+	if assassination_message != "":
+		_threat_item = Label.new()
+		_threat_item.text = assassination_message
+		_threat_item.add_theme_font_size_override("font_size", 20)
+		_threat_item.add_theme_color_override("font_color", COLOR_RED_FACTION)
+		_threat_item.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_threat_item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_threat_item.modulate = Color(1, 1, 1, 0)
+		_right_box.add_child(_threat_item)
+		items.append({"node": _threat_item, "kind": "threat"})
 
 	# Build the tween chain
 	var tween = create_tween()
-	var current_delay = FADE_DELAY
 
 	for i in range(items.size()):
 		var item = items[i]
-		tween.tween_interval(current_delay if i == 0 else FADE_DELAY)
-		tween.tween_property(item, "modulate:a", 1.0, FADE_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-		tween.tween_callback(_on_item_visible.bind(i))
+		tween.tween_interval(FADE_DELAY)
+		tween.tween_property(item.node, "modulate:a", 1.0, FADE_DURATION).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		tween.tween_callback(_on_item_visible.bind(item.kind))
 
 	# After last item is fully visible, wait 2 more seconds then show continue button
 	tween.tween_interval(FADE_DELAY)
 	tween.tween_callback(_show_continue_button)
 
-func _on_item_visible(item_index: int) -> void:
-	if item_index == 0 and not _influence_applied:
+func _on_item_visible(item_index: String) -> void:
+	if item_index == "influence" and not _influence_applied:
 		_influence_applied = true
 		if game_manager and game_manager.state and game_manager.state.policy_enacted:
 			game_manager.apply_policy_influence(game_manager.state.policy_enacted)
 			game_manager.check_win_condition()
-	elif item_index == 1 and not _decree_applied:
+	elif item_index == "decree" and not _decree_applied:
 		_decree_applied = true
 		if game_manager and game_manager.state and game_manager.state.policy_enacted:
 			game_manager.apply_enacted_decree_effect(game_manager.state.policy_enacted, game_manager.state.spending_winner)
+
+func _build_private_assassination_message(state) -> String:
+	if not game_manager:
+		return ""
+	if _viewing_player_id < 0 or _viewing_player_id >= state.players.size():
+		return ""
+	var new_tokens = game_manager.count_tokens_placed_this_round(_viewing_player_id)
+	if new_tokens <= 0:
+		return ""
+	var total_tokens = game_manager.get_tokens_on_player(_viewing_player_id).size()
+	if total_tokens >= 3:
+		return "Three blades now bear your name. Before another dawn, Rome will find your body."
+	if total_tokens == 2:
+		return "A second assassin shadows your steps. One more blade will end your cause."
+	return "Word reaches you in secret: an assassin has been loosed against you."
 
 func _is_game_over() -> bool:
 	return game_manager and game_manager.state and game_manager.state.game_phase == "game_over"

@@ -31,6 +31,11 @@ var spending_panel = null
 var result_panel = null
 var round_start_panel = null
 var info_panel = null
+var _was_election_panel_active: bool = false
+var _was_policy_panel_active: bool = false
+var _was_spending_panel_active: bool = false
+var _was_result_panel_active: bool = false
+var _was_round_start_panel_active: bool = false
 
 const ACTION_PANEL_OFFSET_LEFT: float = 375.0
 const ACTION_PANEL_OFFSET_TOP: float = 210.0
@@ -256,8 +261,9 @@ func _process(_delta):
 	var election_panel_active = in_election or election_transition_active
 	if election_panel:
 		election_panel.visible = election_panel_active
-		if not election_panel_active:
+		if _was_election_panel_active and not election_panel_active:
 			election_panel.reset_panel()
+	_was_election_panel_active = election_panel_active
 	if election_panel and election_panel_active:
 		if nominee_buttons_container:
 			nominee_buttons_container.visible = false
@@ -272,8 +278,9 @@ func _process(_delta):
 	var in_policy = state.game_phase == "policy" and state.policy_enacted == null and not election_transition_active
 	if policy_panel:
 		policy_panel.visible = in_policy
-		if not in_policy:
+		if _was_policy_panel_active and not in_policy:
 			policy_panel.reset_panel()
+	_was_policy_panel_active = in_policy
 	if policy_panel and in_policy:
 		if policy_discard_buttons_container:
 			policy_discard_buttons_container.visible = false
@@ -285,8 +292,9 @@ func _process(_delta):
 	var in_spending = state.game_phase == "spending"
 	if spending_panel:
 		spending_panel.visible = in_spending
-		if not in_spending:
+		if _was_spending_panel_active and not in_spending:
 			spending_panel.reset_panel()
+	_was_spending_panel_active = in_spending
 	if spending_controls_container:
 		spending_controls_container.visible = not in_spending
 
@@ -294,8 +302,9 @@ func _process(_delta):
 	var in_result = state.game_phase == "result" or state.game_phase == "game_over"
 	if result_panel:
 		result_panel.visible = in_result
-		if not in_result:
+		if _was_result_panel_active and not in_result:
 			result_panel.reset_panel()
+	_was_result_panel_active = in_result
 
 	# Toggle round start panel (full screen overlay)
 	var in_round_start = state.game_phase == "round_start"
@@ -305,8 +314,9 @@ func _process(_delta):
 			var consul_name = "Player %d (%s)" % [consul.player_id + 1, game_manager.role_name(consul.role)]
 			round_start_panel.show_round(state.round_number, consul_name)
 		round_start_panel.visible = in_round_start
-		if not in_round_start:
+		if _was_round_start_panel_active and not in_round_start:
 			round_start_panel.reset_panel()
+	_was_round_start_panel_active = in_round_start
 
 	_update_nominee_buttons(state)
 	_update_election_vote_buttons(state)

@@ -191,15 +191,11 @@ func _start_fade_in_sequence(state) -> void:
 	tween.tween_callback(_show_continue_button)
 
 func _on_item_visible(item_index: int) -> void:
-	print("[result_panel] _on_item_visible(%d) influence_applied=%s decree_applied=%s" % [item_index, _influence_applied, _decree_applied])
 	if item_index == 0 and not _influence_applied:
 		_influence_applied = true
 		if game_manager and game_manager.state and game_manager.state.policy_enacted:
 			game_manager.apply_policy_influence(game_manager.state.policy_enacted)
 			game_manager.check_win_condition()
-			print("[result_panel] After check_win: game_phase=%s" % game_manager.state.game_phase)
-		else:
-			print("[result_panel] WARNING: policy_enacted is null/falsy, skipping influence!")
 	elif item_index == 1 and not _decree_applied:
 		_decree_applied = true
 		if game_manager and game_manager.state and game_manager.state.policy_enacted:
@@ -209,10 +205,8 @@ func _is_game_over() -> bool:
 	return game_manager and game_manager.state and game_manager.state.game_phase == "game_over"
 
 func _show_continue_button() -> void:
-	print("[result_panel] _show_continue_button: game_over=%s game_phase=%s" % [_is_game_over(), game_manager.state.game_phase if game_manager and game_manager.state else "null"])
 	if _is_game_over():
 		# Auto-transition to victory screen after a short pause
-		print("[result_panel] Auto-transitioning to victory screen in 1.5s")
 		var tween = create_tween()
 		tween.tween_interval(1.5)
 		tween.tween_callback(_go_to_victory_screen)
@@ -223,7 +217,6 @@ func _show_continue_button() -> void:
 	tween.tween_property(_continue_button, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
 func _go_to_victory_screen() -> void:
-	print("[result_panel] >>> CHANGING SCENE TO VICTORY SCREEN <<<")
 	get_tree().change_scene_to_file("res://scenes/ui/end_game.tscn")
 
 func _build_continue_button() -> Button:
@@ -313,7 +306,6 @@ func _rebuild_history(state) -> void:
 		_history_list.add_child(HSeparator.new())
 
 func _on_continue_pressed() -> void:
-	print("[result_panel] _on_continue_pressed: game_phase=%s" % (game_manager.state.game_phase if game_manager and game_manager.state else "null"))
 	if game_manager:
 		game_manager.progress()
 		if game_manager.state.game_phase == "round_end":

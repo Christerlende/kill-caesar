@@ -5,6 +5,7 @@ const Role = preload("res://scripts/data/role.gd").Role
 const COLOR_GOLD = Color(0.95, 0.82, 0.25, 1)
 const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
 const COLOR_DIM = Color(0.6, 0.55, 0.45, 0.7)
+const AUTO_ADVANCE_DELAY: float = 2.0
 
 var game_manager = null
 
@@ -110,8 +111,8 @@ func _play_entrance_animation(sequence_id: int) -> void:
 	# Pause then consul name
 	tween.tween_interval(0.4)
 	tween.tween_property(_consul_label, "modulate:a", 1.0, 0.6).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	# 2 seconds after consul reveal, auto-progress to election
-	tween.tween_interval(2.0)
+	# Auto-progress to election shortly after consul reveal
+	tween.tween_interval(AUTO_ADVANCE_DELAY)
 	tween.tween_callback(_auto_advance.bind(sequence_id))
 
 func _auto_advance(sequence_id: int) -> void:

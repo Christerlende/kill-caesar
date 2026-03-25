@@ -592,9 +592,9 @@ func _apply_effect(effect_type: String, params: Dictionary) -> void:
 
 func apply_benefit(faction: int, amount: int) -> void:
 	for pl in state.players:
-		if pl.role == faction:
+		if pl.role == faction and not pl.is_dead:
 			pl.money += amount
-	print("Applied benefit %d gold to faction %d" % [amount, faction])
+	print("Applied benefit %d gold to members of faction %d" % [amount, faction])
 
 func _grant_random_assassination_token(target_role: int) -> void:
 	var candidates: Array = []
@@ -611,8 +611,10 @@ func _grant_random_assassination_token(target_role: int) -> void:
 
 func collect_public_repair_contribution(amount: int) -> void:
 	for player in state.players:
+		if player.is_dead:
+			continue
 		player.money = max(player.money - amount, 0)
-	print("Policy 2B: Collected %d gold from each player for repairs" % amount)
+	print("Collected %d gold from each player for public contribution" % amount)
 
 func apply_policy_influence(policy: Policy) -> void:
 	if policy == null:

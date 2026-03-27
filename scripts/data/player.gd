@@ -15,4 +15,4 @@ var is_co_consul: bool = false
 var co_consul_count: int = 0
 var gold_vote: int = 0
 var is_dead: bool = false
-var available_assassination_tokens: int = 0  # 0 or 1 (for now)
+var available_assassination_tokens: int = 0  # must stay in [0, 1]

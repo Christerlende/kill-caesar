@@ -154,7 +154,7 @@ func _process(_delta: float) -> void:
 	# Update your tokens section
 	var my_tokens = viewer.available_assassination_tokens
 	_counter_label.text = "%d/1" % my_tokens
-	_place_button.disabled = my_tokens == 0 or viewer.is_dead
+	_place_button.disabled = my_tokens == 0 or viewer.is_dead or state.game_phase == "result"
 	
 	# Show rounds left if player has a token waiting to be placed
 	if viewer.is_dead:
@@ -167,8 +167,9 @@ func _process(_delta: float) -> void:
 func _on_place_token_pressed() -> void:
 	if viewing_player_id < 0:
 		return
-	var viewer = game_manager.state.players[viewing_player_id]
-	if viewer.is_dead or viewer.available_assassination_tokens < 1:
+	var state = game_manager.state
+	var viewer = state.players[viewing_player_id]
+	if state.game_phase == "result" or viewer.is_dead or viewer.available_assassination_tokens < 1:
 		return
 	
 	# Create and show the target selection dialog
@@ -231,6 +232,7 @@ func _create_target_selection_dialog() -> Popup:
 		btn.text = "Player %d (%s)" % [player_id + 1, game_manager.role_name(player.role)]
 		btn.toggle_mode = true
 		btn.custom_minimum_size = Vector2(0, 28)
+		btn.set_meta("target_player_id", player_id)
 		btn.pressed.connect(_on_target_selected.bind(player_id, popup))
 		list.add_child(btn)
 		target_count += 1
@@ -289,10 +291,7 @@ func _on_target_selected(target_id: int, popup: Popup) -> void:
 				# Reset to default style
 				btn.remove_theme_stylebox_override("normal")
 				btn.remove_theme_stylebox_override("pressed")
-		for child in list.get_children():
-			if child is Button:
-				var btn = child as Button
-				if btn.text.begins_with("Player %d " % (target_id + 1)):
+				if btn.has_meta("target_player_id") and int(btn.get_meta("target_player_id")) == target_id:
 					btn.button_pressed = true
 					var highlight = StyleBoxFlat.new()
 					highlight.bg_color = Color(0.35, 0.1, 0.1, 1.0)
@@ -307,7 +306,6 @@ func _on_target_selected(target_id: int, popup: Popup) -> void:
 					highlight.corner_radius_bottom_right = 4
 					btn.add_theme_stylebox_override("normal", highlight)
 					btn.add_theme_stylebox_override("pressed", highlight)
-					break
 	(popup.get_meta("confirm_button") as Button).disabled = false
 
 func _on_target_confirmed(popup: Popup) -> void:

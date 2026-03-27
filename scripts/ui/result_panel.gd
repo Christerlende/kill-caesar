@@ -27,6 +27,7 @@ var _influence_item: Label = null
 var _decree_item: Label = null
 var _threat_item: Label = null
 var _viewing_player_id: int = -1
+var _fade_tween: Tween = null
 
 func _ready() -> void:
 	clip_contents = true
@@ -126,6 +127,9 @@ func _process(_delta: float) -> void:
 		_start_fade_in_sequence(state)
 
 func reset_panel() -> void:
+	if _fade_tween:
+		_fade_tween.kill()
+		_fade_tween = null
 	_last_ui_key = ""
 	_animation_started = false
 	_influence_applied = false
@@ -143,10 +147,23 @@ func set_viewing_player(player_id: int) -> void:
 	if _viewing_player_id == player_id:
 		return
 	_viewing_player_id = player_id
+	if _fade_tween:
+		_fade_tween.kill()
+		_fade_tween = null
 	_last_ui_key = ""
+	_animation_started = false
+	_continue_button.visible = false
+	_influence_item = null
+	_decree_item = null
+	_threat_item = null
+	for child in _right_box.get_children():
+		child.queue_free()
 
 func _start_fade_in_sequence(state) -> void:
 	_animation_started = true
+	if _fade_tween:
+		_fade_tween.kill()
+		_fade_tween = null
 
 	# Clear right box
 	for child in _right_box.get_children():
@@ -199,6 +216,8 @@ func _start_fade_in_sequence(state) -> void:
 
 	# Build the tween chain
 	var tween = create_tween()
+	_fade_tween = tween
+	tween.finished.connect(_on_fade_sequence_finished)
 
 	for i in range(items.size()):
 		var item = items[i]
@@ -209,6 +228,9 @@ func _start_fade_in_sequence(state) -> void:
 	# After last item is fully visible, wait 2 more seconds then show continue button
 	tween.tween_interval(FADE_DELAY)
 	tween.tween_callback(_show_continue_button)
+
+func _on_fade_sequence_finished() -> void:
+	_fade_tween = null
 
 func _on_item_visible(item_index: String) -> void:
 	if item_index == "influence" and not _influence_applied:
@@ -242,14 +264,14 @@ func _is_game_over() -> bool:
 func _show_continue_button() -> void:
 	if _is_game_over():
 		# Auto-transition to victory screen after a short pause
-		var tween = create_tween()
-		tween.tween_interval(1.5)
-		tween.tween_callback(_go_to_victory_screen)
+		var game_over_tween = create_tween()
+		game_over_tween.tween_interval(1.5)
+		game_over_tween.tween_callback(_go_to_victory_screen)
 		return
 	_continue_button.visible = true
 	_continue_button.modulate = Color(1, 1, 1, 0)
-	var tween = create_tween()
-	tween.tween_property(_continue_button, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	var button_tween = create_tween()
+	button_tween.tween_property(_continue_button, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
 func _go_to_victory_screen() -> void:
 	get_tree().change_scene_to_file("res://scenes/ui/end_game.tscn")

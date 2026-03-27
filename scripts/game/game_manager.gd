@@ -14,6 +14,7 @@ static var last_patrician_influence: int = 0
 static var last_plebian_influence: int = 0
 static var last_round_number: int = 0
 static var last_player_roles: Array = []  # [{player_id, role, role_name}]
+const MAX_ASSASSINATION_TOKENS_PER_PLAYER: int = 1
 
 @onready var state: GameState = GameState.new()
 var pending_policy_choices: Array = []
@@ -600,13 +601,16 @@ func _grant_random_assassination_token(target_role: int) -> void:
 	var candidates: Array = []
 	for i in range(state.players.size()):
 		var player = state.players[i]
-		if player.role == target_role and not player.is_dead:
+		if player.role == target_role and not player.is_dead and player.available_assassination_tokens < MAX_ASSASSINATION_TOKENS_PER_PLAYER:
 			candidates.append(i)
 	if candidates.is_empty():
-		print("No living player of role %d to receive an assassination token" % target_role)
+		print("No eligible player of role %d can receive an assassination token" % target_role)
 		return
 	var target_player_id = candidates[randi() % candidates.size()]
-	state.players[target_player_id].available_assassination_tokens += 1
+	state.players[target_player_id].available_assassination_tokens = min(
+		state.players[target_player_id].available_assassination_tokens + 1,
+		MAX_ASSASSINATION_TOKENS_PER_PLAYER
+	)
 	print("Granted assassination token to Player %d" % (target_player_id + 1))
 
 func collect_public_repair_contribution(amount: int) -> void:
@@ -776,6 +780,12 @@ func reset_assassination_token_round_flags() -> void:
 func grant_assassination_token_testing(player_id: int) -> bool:
 	if player_id < 0 or player_id >= state.players.size():
 		return false
-	state.players[player_id].available_assassination_tokens += 1
+	if state.players[player_id].available_assassination_tokens >= MAX_ASSASSINATION_TOKENS_PER_PLAYER:
+		print("Player %d already has the maximum assassination tokens" % (player_id + 1))
+		return false
+	state.players[player_id].available_assassination_tokens = min(
+		state.players[player_id].available_assassination_tokens + 1,
+		MAX_ASSASSINATION_TOKENS_PER_PLAYER
+	)
 	print("Granted assassination token to Player %d (test)" % (player_id + 1))
 	return true

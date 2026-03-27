@@ -7,12 +7,14 @@ const Role = preload("res://scripts/data/role.gd").Role
 const Player = preload("res://scripts/data/player.gd")
 const Policy = preload("res://scripts/data/policy.gd")
 const GameState = preload("res://scripts/data/game_state.gd")
+const AssassinationToken = preload("res://scripts/data/assassination_token.gd")
 static var influence_to_win: int = 7
 static var last_winner_text: String = ""
 static var last_patrician_influence: int = 0
 static var last_plebian_influence: int = 0
 static var last_round_number: int = 0
 static var last_player_roles: Array = []  # [{player_id, role, role_name}]
+const MAX_ASSASSINATION_TOKENS_PER_PLAYER: int = 1
 
 @onready var state: GameState = GameState.new()
 var pending_policy_choices: Array = []
@@ -45,8 +47,21 @@ func _alignment_score(role: int, beneficiary: int) -> int:
 	return 0
 
 func _required_yes_votes() -> int:
-	# Simple majority: floor(n/2) + 1
-	return int(floor(state.players.size() / 2.0)) + 1
+	# Simple majority of living players: floor(n/2) + 1
+	var living_players = 0
+	for player in state.players:
+		if not player.is_dead:
+			living_players += 1
+	return int(floor(living_players / 2.0)) + 1
+
+func _find_next_living_player(start_index: int) -> int:
+	if state.players.is_empty():
+		return -1
+	for offset in range(state.players.size()):
+		var candidate_index = (start_index + offset) % state.players.size()
+		if not state.players[candidate_index].is_dead:
+			return candidate_index
+	return -1
 
 func _pick_ai_nominee() -> int:
 	var candidates = get_nominee_candidates()
@@ -122,7 +137,9 @@ func _pick_ai_spending_choice(player_id: int) -> Dictionary:
 	var b_score = _alignment_score(player.role, state.policy_enacted.option_b_beneficiary)
 	var option = "A"
 	var score = a_score
-	if b_score > a_score or (b_score == a_score and state.policy_enacted.option_b_gold_amount > state.policy_enacted.option_a_gold_amount):
+	var a_amount = state.policy_enacted.option_a_effect_params.get("amount", 0)
+	var b_amount = state.policy_enacted.option_b_effect_params.get("amount", 0)
+	if b_score > a_score or (b_score == a_score and b_amount > a_amount):
 		option = "B"
 		score = b_score
 
@@ -164,8 +181,10 @@ func auto_run_ai_spending_inputs() -> void:
 
 func _ready():
 	print("GameManager ready")
+	randomize()
 	create_players()
-	state.all_policies = Policy.example_policies()
+	state.all_policies = Policy.load_all_policies()
+	state.all_policies.shuffle()
 	state.game_phase = "init"
 	start_round()
 
@@ -190,8 +209,12 @@ func start_round():
 	state.round_number += 1
 	print("Starting round %d" % state.round_number)
 	distribute_money()
+	reset_assassination_token_round_flags()
 	# make sure consul index is valid
 	state.current_consul_index = state.current_consul_index % state.players.size()
+	var living_consul_index = _find_next_living_player(state.current_consul_index)
+	if living_consul_index >= 0:
+		state.current_consul_index = living_consul_index
 	# reset co-consul for this round
 	state.current_co_consul_index = -1
 	# update runtime flags
@@ -208,7 +231,7 @@ func start_round():
 	# It is only refreshed after a successful election.
 	state.election_vote_inputs.clear()
 	for i in range(state.players.size()):
-		state.election_vote_inputs.append(-1)
+		state.election_vote_inputs.append(0 if state.players[i].is_dead else -1)
 	state.policy_drawn_ids.clear()
 	state.policy_discarded_ids.clear()
 	state.policy_enacted = null
@@ -226,6 +249,9 @@ func start_round():
 
 func distribute_money():
 	for p in state.players:
+		# Dead players don't earn gold
+		if p.is_dead:
+			continue
 		match p.role:
 			Role.CAESAR:
 				p.money += 8
@@ -240,7 +266,9 @@ func print_current_consul():
 	print("Current phase: %s" % state.game_phase)
 
 func next_consul():
-	state.current_consul_index = (state.current_consul_index + 1) % state.players.size()
+	var next_index = _find_next_living_player(state.current_consul_index + 1)
+	if next_index >= 0:
+		state.current_consul_index = next_index
 	# update runtime flags
 	for p in state.players:
 		p.is_consul = false
@@ -254,7 +282,7 @@ func next_consul():
 func get_nominee_candidates() -> Array:
 	var candidates = []
 	for i in range(state.players.size()):
-		if i != state.current_consul_index and not state.ineligible_co_consul_indices.has(i):
+		if i != state.current_consul_index and not state.ineligible_co_consul_indices.has(i) and not state.players[i].is_dead:
 			candidates.append(i)
 	return candidates
 
@@ -263,13 +291,15 @@ func select_election_nominee(nominee_index: int) -> bool:
 		return false
 	if nominee_index < 0 or nominee_index >= state.players.size():
 		return false
+	if state.players[nominee_index].is_dead:
+		return false
 	if not get_nominee_candidates().has(nominee_index):
 		return false
 	state.election_nominee_index = nominee_index
 	state.election_votes_yes.clear()
 	state.election_votes_no.clear()
 	for i in range(state.election_vote_inputs.size()):
-		state.election_vote_inputs[i] = -1
+		state.election_vote_inputs[i] = 0 if state.players[i].is_dead else -1
 	print("Consul selected nominee player %d" % (nominee_index + 1))
 	return true
 
@@ -280,14 +310,19 @@ func set_election_vote(player_id: int, is_yes: bool) -> bool:
 		return false
 	if player_id < 0 or player_id >= state.players.size():
 		return false
+	if state.players[player_id].is_dead:
+		print("Dead player %d cannot vote" % (player_id + 1))
+		return false
 	state.election_vote_inputs[player_id] = 1 if is_yes else 0
 	return true
 
 func are_election_votes_complete() -> bool:
 	if state.election_vote_inputs.size() != state.players.size():
 		return false
-	for vote in state.election_vote_inputs:
-		if vote == -1:
+	for i in range(state.election_vote_inputs.size()):
+		if state.players[i].is_dead:
+			continue
+		if state.election_vote_inputs[i] == -1:
 			return false
 	return true
 
@@ -303,6 +338,8 @@ func conduct_election() -> bool:
 		print("Not all votes are set yet")
 		return false
 	for player_id in range(state.election_vote_inputs.size()):
+		if state.players[player_id].is_dead:
+			continue
 		if state.election_vote_inputs[player_id] == 1:
 			state.election_votes_yes.append(player_id)
 		else:
@@ -387,6 +424,8 @@ func enact_remaining_policy() -> void:
 		policy_discard_stage = ""
 		return
 	state.policy_enacted = pending_policy_choices[0]
+	# Intentionally do NOT return the enacted policy to the deck.
+	# Enacted policies are removed from the game permanently.
 	pending_policy_choices.clear()
 	policy_discard_stage = "done"
 	# Return discarded policies to the deck and shuffle
@@ -406,8 +445,15 @@ func start_spending_phase() -> void:
 	state.spending_confirmed_players.clear()
 	for i in range(state.players.size()):
 		state.spending_private_inputs.append({"option": "A", "amount": 0})
-		state.spending_confirmed_players.append(false)
+		# Dead players are auto-confirmed and skipped
+		state.spending_confirmed_players.append(state.players[i].is_dead)
+	# Find first alive player to input
 	state.spending_input_player_index = 0
+	while state.spending_input_player_index < state.players.size() and state.spending_confirmed_players[state.spending_input_player_index]:
+		state.spending_input_player_index += 1
+	if state.spending_input_player_index >= state.players.size():
+		resolve_spending_totals()
+		return
 	state.spending_stage = "input"
 	print("Spending phase started. Waiting for Player %d private input." % state.spending_input_player_index)
 
@@ -424,6 +470,8 @@ func set_spending_allocation(option_key: String, spend_amount: int) -> bool:
 		return false
 	var player_id = state.spending_input_player_index
 	if player_id < 0 or player_id >= state.players.size():
+		return false
+	if state.players[player_id].is_dead:
 		return false
 	if option_key != "A" and option_key != "B":
 		return false
@@ -448,7 +496,8 @@ func advance_spending_turn() -> bool:
 	if state.game_phase != "spending" or state.spending_stage != "handoff":
 		return false
 	var next_player = state.spending_input_player_index + 1
-	while next_player < state.players.size() and state.spending_confirmed_players[next_player]:
+	# Skip dead players
+	while next_player < state.players.size() and (state.spending_confirmed_players[next_player] or state.players[next_player].is_dead):
 		next_player += 1
 	if next_player >= state.players.size():
 		resolve_spending_totals()
@@ -516,23 +565,60 @@ func _store_player_roles() -> void:
 func apply_enacted_decree_effect(policy: Policy, option_key: String) -> void:
 	if policy == null:
 		return
-	match policy.id:
-		1:
-			if option_key == "A":
-				apply_benefit(Role.PLEBIAN, 2)
-			else:
-				apply_benefit(Role.PATRICIAN, 4)
+	var effect_type: String
+	var params: Dictionary
+	if option_key == "A":
+		effect_type = policy.option_a_effect_type
+		params = policy.option_a_effect_params
+	else:
+		effect_type = policy.option_b_effect_type
+		params = policy.option_b_effect_params
+	_apply_effect(effect_type, params)
+
+func _apply_effect(effect_type: String, params: Dictionary) -> void:
+	match effect_type:
+		"gold_by_role":
+			var role = Policy.role_from_string(str(params.get("role", "plebeian")))
+			apply_benefit(role, int(params.get("amount", 0)))
+		"grant_assassination_token":
+			var target_role = Policy.role_from_string(str(params.get("target_role", "plebeian")))
+			_grant_random_assassination_token(target_role)
+		"tax_all":
+			collect_public_repair_contribution(int(params.get("amount", 0)))
+		"multi":
+			for sub_effect in params.get("effects", []):
+				_apply_effect(sub_effect.get("effect_type", ""), sub_effect.get("params", {}))
 		_:
-			if option_key == "A":
-				apply_benefit(policy.option_a_beneficiary, policy.option_a_gold_amount)
-			else:
-				apply_benefit(policy.option_b_beneficiary, policy.option_b_gold_amount)
+			push_warning("Unknown effect type: %s" % effect_type)
 
 func apply_benefit(faction: int, amount: int) -> void:
 	for pl in state.players:
-		if pl.role == faction:
+		if pl.role == faction and not pl.is_dead:
 			pl.money += amount
-	print("Applied benefit %d gold to faction %d" % [amount, faction])
+	print("Applied benefit %d gold to members of faction %d" % [amount, faction])
+
+func _grant_random_assassination_token(target_role: int) -> void:
+	var candidates: Array = []
+	for i in range(state.players.size()):
+		var player = state.players[i]
+		if player.role == target_role and not player.is_dead and player.available_assassination_tokens < MAX_ASSASSINATION_TOKENS_PER_PLAYER:
+			candidates.append(i)
+	if candidates.is_empty():
+		print("No eligible player of role %d can receive an assassination token" % target_role)
+		return
+	var target_player_id = candidates[randi() % candidates.size()]
+	state.players[target_player_id].available_assassination_tokens = min(
+		state.players[target_player_id].available_assassination_tokens + 1,
+		MAX_ASSASSINATION_TOKENS_PER_PLAYER
+	)
+	print("Granted assassination token to Player %d" % (target_player_id + 1))
+
+func collect_public_repair_contribution(amount: int) -> void:
+	for player in state.players:
+		if player.is_dead:
+			continue
+		player.money = max(player.money - amount, 0)
+	print("Collected %d gold from each player for public contribution" % amount)
 
 func apply_policy_influence(policy: Policy) -> void:
 	if policy == null:
@@ -596,14 +682,110 @@ func progress():
 			_record_round_history()
 		"result":
 			# Effects are now applied by the result panel during fade-in animations.
-			# Just check win condition and advance phase.
+			# Apply assassination tokens (check for deaths), then advance.
+			apply_assassination_tokens()
 			check_win_condition()
 			if state.game_phase != "game_over":
 				state.game_phase = "round_end"
 		"round_end":
+			process_assassination_tokens_end_of_round()
 			next_consul()
 			start_round()
 		"game_over":
 			print("Game is over!")
 		_:
 			print("Unknown phase: %s" % state.game_phase)
+
+# ─── Assassination Token System ───
+
+func place_assassination_token(attacker_id: int, target_id: int) -> bool:
+	if attacker_id < 0 or attacker_id >= state.players.size():
+		return false
+	if target_id < 0 or target_id >= state.players.size():
+		return false
+	if attacker_id == target_id:
+		return false
+	if state.players[attacker_id].is_dead or state.players[target_id].is_dead:
+		return false
+	if state.players[attacker_id].available_assassination_tokens < 1:
+		return false
+	
+	# Create and place the token
+	var token = AssassinationToken.new()
+	token.attacker_id = attacker_id
+	token.target_id = target_id
+	token.rounds_left = 3
+	token.placed_this_round = true
+	
+	state.active_assassination_tokens.append(token)
+	state.players[attacker_id].available_assassination_tokens -= 1
+	
+	print("Player %d placed assassination token on Player %d" % [attacker_id + 1, target_id + 1])
+	return true
+
+func get_tokens_on_player(target_id: int) -> Array:
+	var tokens = []
+	for token in state.active_assassination_tokens:
+		if token.target_id == target_id:
+			tokens.append(token)
+	return tokens
+
+func is_player_dead(player_id: int) -> bool:
+	if player_id < 0 or player_id >= state.players.size():
+		return false
+	return state.players[player_id].is_dead
+
+func count_tokens_placed_this_round(target_id: int) -> int:
+	var count = 0
+	for token in state.active_assassination_tokens:
+		if token.target_id == target_id and token.placed_this_round:
+			count += 1
+	return count
+
+func apply_assassination_tokens() -> void:
+	# For each token placed this round, check if target dies
+	for token in state.active_assassination_tokens:
+		if token.placed_this_round:
+			var target = state.players[token.target_id]
+			if target.is_dead:
+				continue
+			var total_tokens = get_tokens_on_player(token.target_id).size()
+			if total_tokens >= 3:
+				target.is_dead = true
+				print("Player %d has been eliminated by assassination!" % (token.target_id + 1))
+
+func process_assassination_tokens_end_of_round() -> void:
+	# Mark all tokens as "not placed this round" for next round
+	for token in state.active_assassination_tokens:
+		token.placed_this_round = false
+	
+	# Decrement timers and remove expired tokens
+	var expired = []
+	for i in range(state.active_assassination_tokens.size() - 1, -1, -1):
+		var token = state.active_assassination_tokens[i]
+		token.rounds_left -= 1
+		if token.rounds_left <= 0:
+			expired.append(i)
+	
+	# Remove expired tokens (in reverse order to maintain indices)
+	for i in expired:
+		print("Assassination token on Player %d has expired" % (state.active_assassination_tokens[i].target_id + 1))
+		state.active_assassination_tokens.remove_at(i)
+
+func reset_assassination_token_round_flags() -> void:
+	for token in state.active_assassination_tokens:
+		token.placed_this_round = false
+
+# Testing/admin methods
+func grant_assassination_token_testing(player_id: int) -> bool:
+	if player_id < 0 or player_id >= state.players.size():
+		return false
+	if state.players[player_id].available_assassination_tokens >= MAX_ASSASSINATION_TOKENS_PER_PLAYER:
+		print("Player %d already has the maximum assassination tokens" % (player_id + 1))
+		return false
+	state.players[player_id].available_assassination_tokens = min(
+		state.players[player_id].available_assassination_tokens + 1,
+		MAX_ASSASSINATION_TOKENS_PER_PLAYER
+	)
+	print("Granted assassination token to Player %d (test)" % (player_id + 1))
+	return true

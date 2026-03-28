@@ -60,9 +60,11 @@ func _ready() -> void:
 	name_input.text_submitted.connect(_on_name_submitted)
 
 func _process(delta: float) -> void:
+	_process_reveal_timing(delta)
+
+func _process_reveal_timing(delta: float) -> void:
 	if not reveal_panel.visible:
 		return
-
 	if _details_shown:
 		return
 

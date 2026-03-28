@@ -1,120 +1,212 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://do8wp27tn5yqe"]
 
-[ext_resource type="Script" path="res://scripts/ui/pre_game_setup.gd" id="1"]
-[ext_resource type="Theme" path="res://scenes/ui/themes/main_theme.tres" id="2"]
+[ext_resource type="Script" uid="uid://bhe01tfpgobjg" path="res://scripts/ui/pre_game_setup.gd" id="1"]
+[ext_resource type="Theme" uid="uid://b3kgh7pnmq4rs" path="res://scenes/ui/themes/main_theme.tres" id="2"]
+[ext_resource type="Texture2D" uid="uid://bqaov4whihspp" path="res://assets/ui/intro/bg_intro_base.png" id="3"]
+[ext_resource type="Texture2D" uid="uid://70u01mr7rblv" path="res://assets/ui/intro/pillar_left.png" id="4"]
+[ext_resource type="Texture2D" uid="uid://bo252go08biy6" path="res://assets/ui/intro/pillar_right.png" id="5"]
+[ext_resource type="Texture2D" uid="uid://dpi136gjsfbx3" path="res://assets/ui/intro/brazier_base.png" id="6"]
+[ext_resource type="Texture2D" uid="uid://c5me41mlb55ff" path="res://assets/ui/intro/fire_loop.png" id="7"]
 
-[node name="PreGameSetup" type="Control"]
+[node name="PreGameSetup" type="Control" unique_id=205359630]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-script = ExtResource("1")
+grow_horizontal = 2
+grow_vertical = 2
 theme = ExtResource("2")
+script = ExtResource("1")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=1356493377]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-color = Color(0.08, 0.04, 0.04, 1)
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.04, 0.02, 0.02, 0.25)
 
-[node name="CenterContainer" type="CenterContainer" parent="."]
+[node name="ArtLayer" type="Control" parent="." unique_id=1297517081]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 
-[node name="NamePanel" type="PanelContainer" parent="CenterContainer"]
-layout_mode = 2
+[node name="BaseBg" type="TextureRect" parent="ArtLayer" unique_id=1091951463]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -2.0
+offset_top = -168.0
+offset_right = -2.0
+offset_bottom = 3.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("3")
+stretch_mode = 5
+
+[node name="PillarLeft" type="TextureRect" parent="ArtLayer" unique_id=1747559925]
+visible = false
+layout_mode = 0
+anchor_left = 0.26
+anchor_top = 0.2
+anchor_right = 0.26
+anchor_bottom = 0.2
+offset_left = -70.0
+offset_top = -40.0
+offset_right = 70.0
+offset_bottom = 220.0
+texture = ExtResource("4")
+stretch_mode = 6
+
+[node name="PillarRight" type="TextureRect" parent="ArtLayer" unique_id=1678220337]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.74
+anchor_top = 0.2
+anchor_right = 0.74
+anchor_bottom = 0.2
+offset_left = 423.0
+offset_top = -344.0
+offset_right = 1447.0
+offset_bottom = 1192.0
+texture = ExtResource("5")
+stretch_mode = 6
+
+[node name="BrazierBase" type="TextureRect" parent="ArtLayer" unique_id=317986867]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.44
+anchor_top = 0.73
+anchor_right = 0.44
+anchor_bottom = 0.73
+offset_left = -978.0
+offset_top = -284.0
+offset_right = 46.0
+offset_bottom = 740.0
+texture = ExtResource("6")
+stretch_mode = 6
+
+[node name="Fire" type="TextureRect" parent="ArtLayer" unique_id=157329849]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.44
+anchor_top = 0.68
+anchor_right = 0.44
+anchor_bottom = 0.68
+offset_left = 997.0
+offset_top = -642.0
+offset_right = 3064.0
+offset_bottom = 543.0
+texture = ExtResource("7")
+stretch_mode = 6
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=321868763]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 3.0
+offset_top = -1.0
+offset_right = 3.0
+offset_bottom = -1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="NamePanel" type="PanelContainer" parent="CenterContainer" unique_id=240254709]
 custom_minimum_size = Vector2(620, 0)
+layout_mode = 2
 
-[node name="Margin" type="MarginContainer" parent="CenterContainer/NamePanel"]
+[node name="Margin" type="MarginContainer" parent="CenterContainer/NamePanel" unique_id=1959063412]
 layout_mode = 2
 theme_override_constants/margin_left = 32
 theme_override_constants/margin_top = 28
 theme_override_constants/margin_right = 32
 theme_override_constants/margin_bottom = 28
 
-[node name="VBox" type="VBoxContainer" parent="CenterContainer/NamePanel/Margin"]
+[node name="VBox" type="VBoxContainer" parent="CenterContainer/NamePanel/Margin" unique_id=1407308809]
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="TitleLabel" type="Label" parent="CenterContainer/NamePanel/Margin/VBox"]
+[node name="TitleLabel" type="Label" parent="CenterContainer/NamePanel/Margin/VBox" unique_id=976577791]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.75, 0.3, 1)
+theme_override_font_sizes/font_size = 44
 text = "Enter the Senate"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 44
-theme_override_colors/font_color = Color(0.9, 0.75, 0.3, 1)
 
-[node name="BodyLabel" type="Label" parent="CenterContainer/NamePanel/Margin/VBox"]
+[node name="BodyLabel" type="Label" parent="CenterContainer/NamePanel/Margin/VBox" unique_id=1590245458]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.89, 0.83, 0.72, 1)
+theme_override_font_sizes/font_size = 19
 text = "State your name before stepping into Roman politics."
 horizontal_alignment = 1
 autowrap_mode = 3
-theme_override_font_sizes/font_size = 19
-theme_override_colors/font_color = Color(0.89, 0.83, 0.72, 1)
 
-[node name="NameInput" type="LineEdit" parent="CenterContainer/NamePanel/Margin/VBox"]
-layout_mode = 2
+[node name="NameInput" type="LineEdit" parent="CenterContainer/NamePanel/Margin/VBox" unique_id=963676499]
 custom_minimum_size = Vector2(0, 48)
+layout_mode = 2
 placeholder_text = "Your name"
 
-[node name="NameButtonRow" type="HBoxContainer" parent="CenterContainer/NamePanel/Margin/VBox"]
+[node name="NameButtonRow" type="HBoxContainer" parent="CenterContainer/NamePanel/Margin/VBox" unique_id=191439035]
 layout_mode = 2
 theme_override_constants/separation = 12
 alignment = 1
 
-[node name="NameConfirmButton" type="Button" parent="CenterContainer/NamePanel/Margin/VBox/NameButtonRow"]
-layout_mode = 2
+[node name="NameConfirmButton" type="Button" parent="CenterContainer/NamePanel/Margin/VBox/NameButtonRow" unique_id=990156797]
 custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
 text = "Declare Thy Name"
 
-[node name="NameFeedbackLabel" type="Label" parent="CenterContainer/NamePanel/Margin/VBox"]
+[node name="NameFeedbackLabel" type="Label" parent="CenterContainer/NamePanel/Margin/VBox" unique_id=1549358898]
 layout_mode = 2
-text = ""
+theme_override_colors/font_color = Color(0.9, 0.75, 0.3, 1)
 horizontal_alignment = 1
 autowrap_mode = 3
-theme_override_colors/font_color = Color(0.9, 0.75, 0.3, 1)
 
-[node name="RevealPanel" type="PanelContainer" parent="CenterContainer"]
+[node name="RevealPanel" type="PanelContainer" parent="CenterContainer" unique_id=768439923]
 visible = false
-layout_mode = 2
 custom_minimum_size = Vector2(740, 0)
+layout_mode = 2
 
-[node name="Margin" type="MarginContainer" parent="CenterContainer/RevealPanel"]
+[node name="Margin" type="MarginContainer" parent="CenterContainer/RevealPanel" unique_id=2065741179]
 layout_mode = 2
 theme_override_constants/margin_left = 32
 theme_override_constants/margin_top = 28
 theme_override_constants/margin_right = 32
 theme_override_constants/margin_bottom = 28
 
-[node name="VBox" type="VBoxContainer" parent="CenterContainer/RevealPanel/Margin"]
+[node name="VBox" type="VBoxContainer" parent="CenterContainer/RevealPanel/Margin" unique_id=543697725]
 layout_mode = 2
 theme_override_constants/separation = 14
 
-[node name="RevealHeadingLabel" type="Label" parent="CenterContainer/RevealPanel/Margin/VBox"]
+[node name="RevealHeadingLabel" type="Label" parent="CenterContainer/RevealPanel/Margin/VBox" unique_id=1172639169]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.75, 0.3, 1)
+theme_override_font_sizes/font_size = 42
 text = "Secret role"
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 42
-theme_override_colors/font_color = Color(0.9, 0.75, 0.3, 1)
 
-[node name="RevealRoleLabel" type="Label" parent="CenterContainer/RevealPanel/Margin/VBox"]
+[node name="RevealRoleLabel" type="Label" parent="CenterContainer/RevealPanel/Margin/VBox" unique_id=1339594096]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.9, 0.8, 1)
+theme_override_font_sizes/font_size = 34
 text = "..."
 horizontal_alignment = 1
-theme_override_font_sizes/font_size = 34
-theme_override_colors/font_color = Color(0.95, 0.9, 0.8, 1)
 
-[node name="RevealDetailLabel" type="Label" parent="CenterContainer/RevealPanel/Margin/VBox"]
+[node name="RevealDetailLabel" type="Label" parent="CenterContainer/RevealPanel/Margin/VBox" unique_id=614680821]
 layout_mode = 2
-text = ""
+theme_override_colors/font_color = Color(0.89, 0.83, 0.72, 1)
+theme_override_font_sizes/font_size = 19
 horizontal_alignment = 1
 autowrap_mode = 3
-theme_override_font_sizes/font_size = 19
-theme_override_colors/font_color = Color(0.89, 0.83, 0.72, 1)
 
-[node name="RevealReadyButton" type="Button" parent="CenterContainer/RevealPanel/Margin/VBox"]
-layout_mode = 2
+[node name="RevealReadyButton" type="Button" parent="CenterContainer/RevealPanel/Margin/VBox" unique_id=1493825869]
 custom_minimum_size = Vector2(0, 50)
+layout_mode = 2
 text = "Ready"

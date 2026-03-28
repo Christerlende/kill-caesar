@@ -5,6 +5,7 @@ class_name Player
 const Role = preload("res://scripts/data/role.gd").Role
 
 @export var player_id: int = 0
+@export var display_name: String = ""
 @export var role: int = Role.PLEBIAN
 @export var money: int = 0
 @export var is_ai: bool = true

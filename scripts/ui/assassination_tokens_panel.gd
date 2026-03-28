@@ -229,7 +229,7 @@ func _create_target_selection_dialog() -> Popup:
 		if player.is_dead:
 			continue
 		var btn = Button.new()
-		btn.text = "Player %d (%s)" % [player_id + 1, game_manager.role_name(player.role)]
+		btn.text = game_manager.get_player_name(player_id)
 		btn.toggle_mode = true
 		btn.custom_minimum_size = Vector2(0, 28)
 		btn.set_meta("target_player_id", player_id)

@@ -1,0 +1,120 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/pre_game_setup.gd" id="1"]
+[ext_resource type="Theme" path="res://scenes/ui/themes/main_theme.tres" id="2"]
+
+[node name="PreGameSetup" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+theme = ExtResource("2")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.08, 0.04, 0.04, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="NamePanel" type="PanelContainer" parent="CenterContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(620, 0)
+
+[node name="Margin" type="MarginContainer" parent="CenterContainer/NamePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 28
+
+[node name="VBox" type="VBoxContainer" parent="CenterContainer/NamePanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/NamePanel/Margin/VBox"]
+layout_mode = 2
+text = "Enter the Senate"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 44
+theme_override_colors/font_color = Color(0.9, 0.75, 0.3, 1)
+
+[node name="BodyLabel" type="Label" parent="CenterContainer/NamePanel/Margin/VBox"]
+layout_mode = 2
+text = "State your name before stepping into Roman politics."
+horizontal_alignment = 1
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 19
+theme_override_colors/font_color = Color(0.89, 0.83, 0.72, 1)
+
+[node name="NameInput" type="LineEdit" parent="CenterContainer/NamePanel/Margin/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 48)
+placeholder_text = "Your name"
+
+[node name="NameButtonRow" type="HBoxContainer" parent="CenterContainer/NamePanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="NameConfirmButton" type="Button" parent="CenterContainer/NamePanel/Margin/VBox/NameButtonRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 50)
+text = "Declare Thy Name"
+
+[node name="NameFeedbackLabel" type="Label" parent="CenterContainer/NamePanel/Margin/VBox"]
+layout_mode = 2
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 3
+theme_override_colors/font_color = Color(0.9, 0.75, 0.3, 1)
+
+[node name="RevealPanel" type="PanelContainer" parent="CenterContainer"]
+visible = false
+layout_mode = 2
+custom_minimum_size = Vector2(740, 0)
+
+[node name="Margin" type="MarginContainer" parent="CenterContainer/RevealPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 32
+theme_override_constants/margin_top = 28
+theme_override_constants/margin_right = 32
+theme_override_constants/margin_bottom = 28
+
+[node name="VBox" type="VBoxContainer" parent="CenterContainer/RevealPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="RevealHeadingLabel" type="Label" parent="CenterContainer/RevealPanel/Margin/VBox"]
+layout_mode = 2
+text = "Secret role"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 42
+theme_override_colors/font_color = Color(0.9, 0.75, 0.3, 1)
+
+[node name="RevealRoleLabel" type="Label" parent="CenterContainer/RevealPanel/Margin/VBox"]
+layout_mode = 2
+text = "..."
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 34
+theme_override_colors/font_color = Color(0.95, 0.9, 0.8, 1)
+
+[node name="RevealDetailLabel" type="Label" parent="CenterContainer/RevealPanel/Margin/VBox"]
+layout_mode = 2
+text = ""
+horizontal_alignment = 1
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 19
+theme_override_colors/font_color = Color(0.89, 0.83, 0.72, 1)
+
+[node name="RevealReadyButton" type="Button" parent="CenterContainer/RevealPanel/Margin/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 50)
+text = "Ready"

@@ -1,5 +1,6 @@
 extends Control
 
+const GameManager = preload("res://scripts/game/game_manager.gd")
 const Role = preload("res://scripts/data/role.gd").Role
 
 const PLAYER_COUNT: int = 6
@@ -100,9 +101,7 @@ func _prepare_match_roles() -> void:
 	_assigned_roles = roles
 
 	# Queue this distribution so the game scene uses the same roles.
-	var game_manager_script = load("res://scripts/game/game_manager.gd")
-	if game_manager_script:
-		game_manager_script.set("queued_player_roles", _assigned_roles.duplicate())
+	GameManager.queue_player_roles(_assigned_roles)
 
 func _prepare_name_slots() -> void:
 	_player_names.clear()
@@ -148,9 +147,7 @@ func _on_name_submitted(submitted_text: String) -> void:
 	_on_name_confirm_pressed()
 
 func _queue_player_names() -> void:
-	var game_manager_script = load("res://scripts/game/game_manager.gd")
-	if game_manager_script:
-		game_manager_script.set("queued_player_names", _player_names.duplicate())
+	GameManager.queue_player_names(_player_names)
 
 func _on_reveal_ready_pressed() -> void:
 	if _current_player_index < PLAYER_COUNT - 1:

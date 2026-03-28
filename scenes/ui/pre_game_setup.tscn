@@ -3,10 +3,7 @@
 [ext_resource type="Script" uid="uid://bhe01tfpgobjg" path="res://scripts/ui/pre_game_setup.gd" id="1"]
 [ext_resource type="Theme" uid="uid://b3kgh7pnmq4rs" path="res://scenes/ui/themes/main_theme.tres" id="2"]
 [ext_resource type="Texture2D" uid="uid://bqaov4whihspp" path="res://assets/ui/intro/bg_intro_base.png" id="3"]
-[ext_resource type="Texture2D" uid="uid://70u01mr7rblv" path="res://assets/ui/intro/pillar_left.png" id="4"]
-[ext_resource type="Texture2D" uid="uid://bo252go08biy6" path="res://assets/ui/intro/pillar_right.png" id="5"]
 [ext_resource type="Texture2D" uid="uid://dpi136gjsfbx3" path="res://assets/ui/intro/brazier_base.png" id="6"]
-[ext_resource type="Texture2D" uid="uid://c5me41mlb55ff" path="res://assets/ui/intro/fire_loop.png" id="7"]
 
 [node name="PreGameSetup" type="Control" unique_id=205359630]
 layout_mode = 3
@@ -41,69 +38,22 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -2.0
-offset_top = -168.0
-offset_right = -2.0
-offset_bottom = 3.0
 grow_horizontal = 2
 grow_vertical = 2
 texture = ExtResource("3")
 stretch_mode = 5
 
-[node name="PillarLeft" type="TextureRect" parent="ArtLayer" unique_id=1747559925]
-visible = false
-layout_mode = 0
-anchor_left = 0.26
-anchor_top = 0.2
-anchor_right = 0.26
-anchor_bottom = 0.2
-offset_left = -70.0
-offset_top = -40.0
-offset_right = 70.0
-offset_bottom = 220.0
-texture = ExtResource("4")
-stretch_mode = 6
-
-[node name="PillarRight" type="TextureRect" parent="ArtLayer" unique_id=1678220337]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.74
-anchor_top = 0.2
-anchor_right = 0.74
-anchor_bottom = 0.2
-offset_left = 423.0
-offset_top = -344.0
-offset_right = 1447.0
-offset_bottom = 1192.0
-texture = ExtResource("5")
-stretch_mode = 6
-
 [node name="BrazierBase" type="TextureRect" parent="ArtLayer" unique_id=317986867]
-layout_mode = 1
-anchors_preset = -1
+layout_mode = 0
 anchor_left = 0.44
 anchor_top = 0.73
 anchor_right = 0.44
 anchor_bottom = 0.73
-offset_left = -978.0
+offset_left = -92.0
 offset_top = -284.0
-offset_right = 46.0
-offset_bottom = 740.0
+offset_right = 52.0
+offset_bottom = 74.0
 texture = ExtResource("6")
-stretch_mode = 6
-
-[node name="Fire" type="TextureRect" parent="ArtLayer" unique_id=157329849]
-layout_mode = 1
-anchors_preset = -1
-anchor_left = 0.44
-anchor_top = 0.68
-anchor_right = 0.44
-anchor_bottom = 0.68
-offset_left = 997.0
-offset_top = -642.0
-offset_right = 3064.0
-offset_bottom = 543.0
-texture = ExtResource("7")
 stretch_mode = 6
 
 [node name="CenterContainer" type="CenterContainer" parent="." unique_id=321868763]
@@ -111,10 +61,6 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 3.0
-offset_top = -1.0
-offset_right = 3.0
-offset_bottom = -1.0
 grow_horizontal = 2
 grow_vertical = 2
 

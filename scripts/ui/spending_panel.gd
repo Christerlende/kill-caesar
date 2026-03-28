@@ -6,8 +6,8 @@ const _DiagonalStamp = preload("res://scripts/ui/diagonal_stamp.gd")
 const COLOR_GOLD = Color(0.95, 0.82, 0.25, 1)
 const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
 const COLOR_DIM = Color(0.6, 0.55, 0.45, 0.8)
-const COLOR_A = Color(0.22, 0.42, 0.85, 0.85)
-const COLOR_B = Color(0.78, 0.2, 0.14, 0.85)
+const COLOR_PLEBEIAN_POLICY = Color(0.22, 0.42, 0.85, 0.85)
+const COLOR_PATRICIAN_POLICY = Color(0.78, 0.2, 0.14, 0.85)
 const COLOR_PARCHMENT = Color(0.85, 0.75, 0.58, 1)
 const COLOR_PARCHMENT_TEXT = Color(0.2, 0.15, 0.08, 1)
 
@@ -123,8 +123,9 @@ func _rebuild_ui(state) -> void:
 		if state.spending_stage == "resolved":
 			result_a = "won" if state.spending_winner == "A" else "lost"
 			result_b = "won" if state.spending_winner == "B" else "lost"
-		var card_a = _build_option_card("A", state.policy_enacted.option_a_text, COLOR_A, state, result_a)
-		var card_b = _build_option_card("B", state.policy_enacted.option_b_text, COLOR_B, state, result_b)
+		var policy_accent = _policy_accent_color(state.policy_enacted.faction)
+		var card_a = _build_option_card("A", state.policy_enacted.option_a_text, policy_accent, state, result_a)
+		var card_b = _build_option_card("B", state.policy_enacted.option_b_text, policy_accent, state, result_b)
 		if state.spending_stage == "resolved":
 			var col_a = _wrap_card_with_tribute(card_a, "A", state)
 			var col_b = _wrap_card_with_tribute(card_b, "B", state)
@@ -151,6 +152,15 @@ func _rebuild_ui(state) -> void:
 			waiting.text = "Waiting for spending phase..."
 			waiting.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			_controls_box.add_child(waiting)
+
+func _policy_accent_color(faction: int) -> Color:
+	match faction:
+		Role.PLEBIAN:
+			return COLOR_PLEBEIAN_POLICY
+		Role.PATRICIAN:
+			return COLOR_PATRICIAN_POLICY
+		_:
+			return COLOR_GOLD
 
 func _build_option_card(letter: String, text: String, accent: Color, state, result: String = "") -> PanelContainer:
 	var is_winner = result == "won"

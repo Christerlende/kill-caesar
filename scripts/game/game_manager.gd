@@ -9,6 +9,8 @@ const Policy = preload("res://scripts/data/policy.gd")
 const GameState = preload("res://scripts/data/game_state.gd")
 const AssassinationToken = preload("res://scripts/data/assassination_token.gd")
 static var influence_to_win: int = 7
+const TAX_FREE_THRESHOLD: int = 32
+const TAX_SLOPE_DIVISOR: float = 2.0
 static var queued_player_roles: Array = []
 static var queued_player_names: Array = []
 static var last_winner_text: String = ""
@@ -301,18 +303,45 @@ func start_round():
 	state.game_phase = "round_start"
 	print_current_consul()
 
+func _base_income_for_role(role: int) -> int:
+	match role:
+		Role.CAESAR:
+			return 8
+		Role.PATRICIAN:
+			return 6
+		Role.PLEBIAN:
+			return 4
+		_:
+			return 0
+
+func _calculate_income_tax(current_money: int, base_income: int) -> int:
+	if base_income <= 0:
+		return 0
+	var excess = max(current_money - TAX_FREE_THRESHOLD, 0)
+	if excess <= 0:
+		return 0
+	var tax_due = int(ceil(float(excess) / TAX_SLOPE_DIVISOR))
+	return min(tax_due, base_income)
+
+func get_role_base_income(role: int) -> int:
+	return _base_income_for_role(role)
+
+func get_income_tax_for_purse(role: int, current_money: int) -> int:
+	var base_income = _base_income_for_role(role)
+	return _calculate_income_tax(current_money, base_income)
+
+func get_tax_free_threshold() -> int:
+	return TAX_FREE_THRESHOLD
+
 func distribute_money():
 	for p in state.players:
 		# Dead players don't earn gold
 		if p.is_dead:
 			continue
-		match p.role:
-			Role.CAESAR:
-				p.money += 8
-			Role.PATRICIAN:
-				p.money += 6
-			Role.PLEBIAN:
-				p.money += 4
+		var base_income = _base_income_for_role(p.role)
+		var tax_due = _calculate_income_tax(p.money, base_income)
+		var net_income = max(base_income - tax_due, 0)
+		p.money += net_income
 
 func print_current_consul():
 	var p = state.players[state.current_consul_index]

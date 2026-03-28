@@ -15,6 +15,7 @@ var _viewer_index: int = 0
 var _role_title_label: Label
 var _purse_amount_label: Label
 var _income_label: Label
+var _tax_hint_label: Label
 var _intel_section: VBoxContainer
 var _lower_content_section: VBoxContainer
 var _rules_popup: PanelContainer
@@ -144,6 +145,14 @@ func _build_purse_section() -> PanelContainer:
 	_income_label.add_theme_font_size_override("font_size", 14)
 	_income_label.add_theme_color_override("font_color", Color(0.80, 0.68, 0.20, 0.8))
 	gold_row.add_child(_income_label)
+
+	_tax_hint_label = Label.new()
+	_tax_hint_label.text = "Taxes start above 32 gold and reduce income."
+	_tax_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tax_hint_label.add_theme_font_size_override("font_size", 11)
+	_tax_hint_label.add_theme_color_override("font_color", COLOR_DIM)
+	_tax_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	col.add_child(_tax_hint_label)
 
 	return card
 
@@ -292,7 +301,7 @@ func _role_color(role: int) -> Color:
 		_:
 			return COLOR_CREAM
 
-func _gold_gain_for_role(role: int) -> int:
+func _fallback_gold_gain_for_role(role: int) -> int:
 	match role:
 		Role.CAESAR:
 			return 8
@@ -306,7 +315,20 @@ func _update_role_title(player) -> void:
 
 func _update_purse(player) -> void:
 	_purse_amount_label.text = str(player.money)
-	_income_label.text = "+%d/round" % _gold_gain_for_role(player.role)
+	var base_income = _fallback_gold_gain_for_role(player.role)
+	var tax_due = 0
+	var tax_threshold = 32
+	if game_manager and game_manager.has_method("get_role_base_income"):
+		base_income = game_manager.get_role_base_income(player.role)
+	if game_manager and game_manager.has_method("get_income_tax_for_purse"):
+		tax_due = game_manager.get_income_tax_for_purse(player.role, player.money)
+	if game_manager and game_manager.has_method("get_tax_free_threshold"):
+		tax_threshold = game_manager.get_tax_free_threshold()
+	_income_label.text = "+%d/round" % base_income
+	if tax_due > 0:
+		_income_label.text += "  -%d taxes" % tax_due
+	if _tax_hint_label:
+		_tax_hint_label.text = "Taxes start above %d gold and reduce income." % tax_threshold
 
 func _update_intel(state, player) -> void:
 	for child in _intel_section.get_children():

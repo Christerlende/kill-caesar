@@ -255,7 +255,7 @@ func _build_input_controls(state) -> void:
 		_draft_amount = 0
 
 	var title = Label.new()
-	title.text = "Player %d: cast your treasury vote" % (player_id + 1)
+	title.text = "%s: cast your treasury vote" % game_manager.get_player_name(player_id)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_color_override("font_color", COLOR_GOLD)
 	title.add_theme_font_size_override("font_size", 20)

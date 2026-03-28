@@ -325,7 +325,7 @@ func _update_intel(state, player) -> void:
 				if p.player_id == player.player_id:
 					continue
 				var line = Label.new()
-				line.text = "P%d — %s" % [p.player_id + 1, _intel_role_name(p.role)]
+				line.text = "%s — %s" % [game_manager.get_player_name(p.player_id), _intel_role_name(p.role)]
 				line.add_theme_font_size_override("font_size", 13)
 				line.add_theme_color_override("font_color", _role_color(p.role))
 				_intel_section.add_child(line)
@@ -343,7 +343,7 @@ func _update_intel(state, player) -> void:
 					continue
 				if p.role == Role.PATRICIAN:
 					var line = Label.new()
-					line.text = "Your ally: Player %d" % (p.player_id + 1)
+					line.text = "Your ally: %s" % game_manager.get_player_name(p.player_id)
 					line.add_theme_font_size_override("font_size", 14)
 					line.add_theme_color_override("font_color", COLOR_CREAM)
 					_intel_section.add_child(line)

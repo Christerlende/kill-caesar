@@ -9,6 +9,8 @@ const Policy = preload("res://scripts/data/policy.gd")
 const GameState = preload("res://scripts/data/game_state.gd")
 const AssassinationToken = preload("res://scripts/data/assassination_token.gd")
 static var influence_to_win: int = 7
+static var queued_player_roles: Array = []
+static var queued_player_names: Array = []
 static var last_winner_text: String = ""
 static var last_patrician_influence: int = 0
 static var last_plebian_influence: int = 0
@@ -33,6 +35,15 @@ func role_name(role: int) -> String:
 		_:
 			return "Unknown"
 
+func get_player_name(player_id: int) -> String:
+	if player_id < 0 or player_id >= state.players.size():
+		return "Player %d" % (player_id + 1)
+	var player = state.players[player_id]
+	var chosen_name = str(player.display_name).strip_edges()
+	if chosen_name == "":
+		return "Player %d" % (player.player_id + 1)
+	return chosen_name
+
 func _alignment_score(role: int, beneficiary: int) -> int:
 	if role == beneficiary:
 		return 2
@@ -45,6 +56,12 @@ func _alignment_score(role: int, beneficiary: int) -> int:
 	if role == Role.PLEBIAN and beneficiary == Role.PATRICIAN:
 		return -2
 	return 0
+
+static func queue_player_roles(roles: Array) -> void:
+	queued_player_roles = roles.duplicate()
+
+static func queue_player_names(names: Array) -> void:
+	queued_player_names = names.duplicate()
 
 func _required_yes_votes() -> int:
 	# Simple majority of living players: floor(n/2) + 1
@@ -193,17 +210,54 @@ func create_players():
 	for i in range(6):
 		var p = Player.new()
 		p.player_id = i
+		p.display_name = "Player %d" % (i + 1)
 		p.is_ai = true
 		state.players.append(p)
+	_apply_queued_player_names()
 	assign_roles()
 
 func assign_roles():
-	# simple distribution: 1 Caesar, 2 Patricians, 3 Plebeians
-	var roles = [Role.CAESAR] + [Role.PATRICIAN, Role.PATRICIAN] + [Role.PLEBIAN, Role.PLEBIAN, Role.PLEBIAN]
-	roles.shuffle()
+	var roles: Array = []
+	if _has_valid_queued_roles():
+		roles = queued_player_roles.duplicate()
+	else:
+		# simple distribution: 1 Caesar, 2 Patricians, 3 Plebeians
+		roles = [Role.CAESAR] + [Role.PATRICIAN, Role.PATRICIAN] + [Role.PLEBIAN, Role.PLEBIAN, Role.PLEBIAN]
+		roles.shuffle()
 	for i in range(state.players.size()):
 		state.players[i].role = roles[i]
 		state.players[i].money = 0
+	queued_player_roles.clear()
+
+func _has_valid_queued_roles() -> bool:
+	if queued_player_roles.size() != state.players.size():
+		return false
+	var caesar_count = 0
+	var patrician_count = 0
+	var plebeian_count = 0
+	for role in queued_player_roles:
+		match role:
+			Role.CAESAR:
+				caesar_count += 1
+			Role.PATRICIAN:
+				patrician_count += 1
+			Role.PLEBIAN:
+				plebeian_count += 1
+			_:
+				return false
+	return caesar_count == 1 and patrician_count == 2 and plebeian_count == 3
+
+func _has_valid_queued_names() -> bool:
+	return queued_player_names.size() == state.players.size()
+
+func _apply_queued_player_names() -> void:
+	if not _has_valid_queued_names():
+		queued_player_names.clear()
+		return
+	for i in range(state.players.size()):
+		var chosen_name = str(queued_player_names[i]).strip_edges()
+		state.players[i].display_name = chosen_name if chosen_name != "" else ("Player %d" % (i + 1))
+	queued_player_names.clear()
 
 func start_round():
 	state.round_number += 1
@@ -630,8 +684,8 @@ func apply_policy_influence(policy: Policy) -> void:
 	print("Applied influence for policy %d (faction %d)" % [policy.id, policy.faction])
 
 func _record_round_history() -> void:
-	var consul_name = "Player %d" % (state.current_consul_index + 1)
-	var co_consul_name = "Player %d" % (state.current_co_consul_index + 1) if state.current_co_consul_index >= 0 else "None"
+	var consul_name = get_player_name(state.current_consul_index)
+	var co_consul_name = get_player_name(state.current_co_consul_index) if state.current_co_consul_index >= 0 else "None"
 	var faction = "Plebeian" if state.policy_enacted != null and state.policy_enacted.faction == Role.PLEBIAN else "Patrician"
 	var entry = {
 		"round_number": state.round_number,

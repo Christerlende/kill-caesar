@@ -107,10 +107,10 @@ func _process(_delta):
 func _update_stage_label(state, stage: String) -> void:
 	if stage == "consul":
 		var consul = state.players[state.current_consul_index]
-		_stage_label.text = "Consul (Player %d) — choose a policy to discard" % consul.player_id
+		_stage_label.text = "Consul (%s) — choose a policy to discard" % game_manager.get_player_name(consul.player_id)
 	elif stage == "co_consul":
 		var co = state.players[state.current_co_consul_index]
-		_stage_label.text = "Co-Consul (Player %d) — choose a policy to discard" % co.player_id
+		_stage_label.text = "Co-Consul (%s) — choose a policy to discard" % game_manager.get_player_name(co.player_id)
 	else:
 		_stage_label.text = ""
 

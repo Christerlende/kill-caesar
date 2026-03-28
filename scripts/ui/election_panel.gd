@@ -192,7 +192,7 @@ func _process(_delta):
 
 func _update_consul_info(state) -> void:
 	var consul = state.players[state.current_consul_index]
-	_consul_label.text = "Consul: Player %d (%s)" % [consul.player_id + 1, game_manager.role_name(consul.role)]
+	_consul_label.text = "Consul: %s" % _player_name(consul.player_id)
 
 func _update_nominee(state) -> void:
 	if state.election_nominee_index < 0:
@@ -206,7 +206,7 @@ func _update_nominee(state) -> void:
 			_last_nominee_index = -1
 	else:
 		var nominee = state.players[state.election_nominee_index]
-		_nominee_label.text = "Nominated for co-consul: Player %d (%s)" % [nominee.player_id + 1, game_manager.role_name(nominee.role)]
+		_nominee_label.text = "Nominated for co-consul: %s" % _player_name(nominee.player_id)
 		if _last_nominee_index < 0:
 			_clear_nominee_buttons()
 			_last_nominee_index = state.election_nominee_index
@@ -223,7 +223,7 @@ func _rebuild_nominee_buttons(state) -> void:
 	for idx in candidates:
 		var player = state.players[idx]
 		var b = Button.new()
-		b.text = "Player %d (%s)" % [player.player_id + 1, game_manager.role_name(player.role)]
+		b.text = _player_name(player.player_id)
 		b.pressed.connect(_on_nominee_selected.bind(idx))
 		btn_row.add_child(b)
 	_nominee_btn_container.add_child(btn_row)
@@ -296,7 +296,7 @@ func _update_voting(state) -> void:
 		col.add_child(name_row)
 
 		var name_label = Label.new()
-		name_label.text = "Player %d" % (player.player_id + 1)
+		name_label.text = _player_name(player.player_id)
 		name_label.add_theme_font_size_override("font_size", 16)
 		name_label.add_theme_color_override("font_color", COLOR_CREAM)
 		name_row.add_child(name_label)
@@ -307,13 +307,6 @@ func _update_voting(state) -> void:
 			check_icon.add_theme_font_size_override("font_size", 18)
 			check_icon.add_theme_color_override("font_color", COLOR_GREEN)
 			name_row.add_child(check_icon)
-
-		var role_label = Label.new()
-		role_label.text = game_manager.role_name(player.role)
-		role_label.add_theme_font_size_override("font_size", 13)
-		role_label.add_theme_color_override("font_color", COLOR_DIM)
-		role_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		col.add_child(role_label)
 
 		if election_resolved:
 			var yes_cb = CheckBox.new()
@@ -373,10 +366,10 @@ func _update_result(state) -> void:
 
 	var yes_names = []
 	for pid in state.election_votes_yes:
-		yes_names.append("Player %d" % (pid + 1))
+		yes_names.append(_player_name(pid))
 	var no_names = []
 	for pid in state.election_votes_no:
-		no_names.append("Player %d" % (pid + 1))
+		no_names.append(_player_name(pid))
 	var yes_str = ", ".join(yes_names) if yes_names.size() > 0 else "none"
 	var no_str = ", ".join(no_names) if no_names.size() > 0 else "none"
 	var transition_text = _build_transition_text(state)
@@ -384,12 +377,12 @@ func _update_result(state) -> void:
 	_result_breakdown.text = details
 
 func _build_transition_text(state) -> String:
-	var consul_id = state.current_consul_index + 1
-	var nominee_id = state.election_nominee_index + 1
+	var consul_name = _player_name(state.current_consul_index)
+	var nominee_name = _player_name(state.election_nominee_index)
 	if state.election_passed:
-		var co_consul_id = (state.current_co_consul_index + 1) if state.current_co_consul_index >= 0 else nominee_id
-		return "Player %d and Player %d step into power as consul and co-consul." % [consul_id, co_consul_id]
-	return "Player %d and Player %d do not gain power. The senate rejects their rise this round." % [consul_id, nominee_id]
+		var co_consul_name = _player_name(state.current_co_consul_index) if state.current_co_consul_index >= 0 else nominee_name
+		return "%s and %s step into power as consul and co-consul." % [consul_name, co_consul_name]
+	return "%s and %s do not gain power. The senate rejects their rise this round." % [consul_name, nominee_name]
 
 func reset_panel() -> void:
 	_last_nominee_index = -99
@@ -488,3 +481,6 @@ func _make_label(text: String, font_size: int, color: Color, align: int) -> Labe
 	l.horizontal_alignment = align
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return l
+
+func _player_name(player_id: int) -> String:
+	return game_manager.get_player_name(player_id)

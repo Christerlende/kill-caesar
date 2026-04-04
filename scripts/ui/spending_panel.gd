@@ -24,7 +24,6 @@ var _draft_option: String = "A"
 var _draft_amount: int = 0
 var _last_ui_key: String = ""
 var _resolved_animated: bool = false
-var _greed_veto_delay_armed: bool = false
 
 func _ready() -> void:
 	clip_contents = true
@@ -103,7 +102,6 @@ func reset_panel() -> void:
 	_draft_amount = 0
 	_last_ui_key = ""
 	_resolved_animated = false
-	_greed_veto_delay_armed = false
 
 func is_preview_active() -> bool:
 	return _draft_player_id >= 0
@@ -345,10 +343,6 @@ func _build_resolved_controls(state) -> void:
 		wait.add_theme_font_size_override("font_size", 18)
 		wait.add_theme_color_override("font_color", COLOR_CREAM)
 		_controls_box.add_child(wait)
-		if not _greed_veto_delay_armed:
-			_greed_veto_delay_armed = true
-			var t = get_tree().create_timer(2.0)
-			t.timeout.connect(_on_greed_veto_delay_finished)
 		return
 
 	var proceed_btn = Button.new()
@@ -383,15 +377,6 @@ func _on_pass_pressed() -> void:
 
 func _on_resolved_proceed_pressed() -> void:
 	game_manager.progress()
-	_last_ui_key = ""
-
-func _on_greed_veto_delay_finished() -> void:
-	_greed_veto_delay_armed = false
-	if not game_manager or not game_manager.state:
-		return
-	var st = game_manager.state
-	if st.game_phase == "spending" and st.greed_round:
-		game_manager.enter_greed_screen()
 	_last_ui_key = ""
 
 func _show_dual_veto_immediate(card_a: PanelContainer, card_b: PanelContainer) -> void:

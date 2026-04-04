@@ -1,2 +1,0 @@
-{"data":{"greed_events_completed":1,"hint_text":"Spend at least 1 gold in total across both decrees to avoid Chaos.","min_spend":1,"runId":"post-fix"},"hypothesisId":"H2","location":"spending_panel.gd:_apply_chaos_collective_hint","message":"decree_hint","sessionId":"507e74","timestamp":85502}
-{"data":{"greed_T":0,"greed_events_completed":1,"min_spend_shown_ui":1,"runId":"post-fix","threshold_index_used":0,"total_spent":1},"hypothesisId":"H2","location":"game_manager.gd:resolve_spending_totals","message":"treasury_check","sessionId":"507e74","timestamp":90016}

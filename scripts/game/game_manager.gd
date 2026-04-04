@@ -32,6 +32,7 @@ const GREED_THRESHOLDS: Array = [0, 1, 2, 5, 7]
 ## Five treasury failures end the game (collapse before the count would reach 5).
 const GREED_CHAOS_SLOT_COUNT: int = 5
 const GREED_COLLAPSE_WINNER: String = "collapse"
+const GREED_ENTER_DELAY_SEC: float = 2.0
 
 @onready var state: GameState = GameState.new()
 var pending_policy_choices: Array = []
@@ -280,11 +281,12 @@ func _apply_queued_player_names() -> void:
 func start_round():
 	state.round_number += 1
 	print("Starting round %d" % state.round_number)
+	distribute_money()
+	## Decrement after income so GREED_HEAVY_TAXES "3 rounds" means three distributions at the reduced threshold.
 	if state.greed_tax_rounds_remaining > 0:
 		state.greed_tax_rounds_remaining -= 1
 		if state.greed_tax_rounds_remaining <= 0:
 			state.greed_tax_threshold_override = 0
-	distribute_money()
 	reset_assassination_token_round_flags()
 	# make sure consul index is valid
 	state.current_consul_index = state.current_consul_index % state.players.size()
@@ -662,6 +664,16 @@ func resolve_spending_totals() -> void:
 		else:
 			state.spending_winner = "B"
 	state.spending_stage = "resolved"
+	if state.greed_round:
+		_schedule_enter_greed_after_delay()
+
+func _schedule_enter_greed_after_delay() -> void:
+	if not is_inside_tree():
+		return
+	get_tree().create_timer(GREED_ENTER_DELAY_SEC).timeout.connect(_on_greed_enter_delay_timeout)
+
+func _on_greed_enter_delay_timeout() -> void:
+	enter_greed_screen()
 
 func _trigger_rome_collapse() -> void:
 	state.game_phase = "game_over"
@@ -685,6 +697,9 @@ func finish_greed_sequence() -> void:
 	state.greed_events_completed += 1
 	state.game_phase = "result"
 	_record_round_history()
+	# Defer so ResultPanel._process runs this frame while phase is still "result" (e.g. GREED_PENDULUM
+	# can hit the win threshold; sync check_win would flip to game_over before the fade tween starts).
+	call_deferred("check_win_condition")
 
 func roll_greed_punishment_id() -> int:
 	var pool: Array = []

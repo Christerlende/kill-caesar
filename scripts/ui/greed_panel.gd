@@ -1,13 +1,15 @@
 extends PanelContainer
 
-## Full-screen Greed sequence after treasury failure (IDs must match GameManager GREED_* constants).
+const GameManager = preload("res://scripts/game/game_manager.gd")
 
-const PID_ROME_BURNS: int = 0
-const PID_ASSASSINS_DOOR: int = 1
-const PID_HEAVY_TAXES: int = 2
-const PID_PENDULUM: int = 3
-const PID_CAESAR_STEPS: int = 4
-const PID_KNIVES_OUT: int = 5
+## Full-screen Greed sequence after treasury failure (punishment IDs from GameManager.GREED_*).
+
+const PID_ROME_BURNS: int = GameManager.GREED_ROME_BURNS
+const PID_ASSASSINS_DOOR: int = GameManager.GREED_ASSASSINS_DOOR
+const PID_HEAVY_TAXES: int = GameManager.GREED_HEAVY_TAXES
+const PID_PENDULUM: int = GameManager.GREED_PENDULUM
+const PID_CAESAR_STEPS: int = GameManager.GREED_CAESAR_STEPS
+const PID_KNIVES_OUT: int = GameManager.GREED_KNIVES_OUT
 
 const COLOR_GOLD = Color(0.95, 0.82, 0.25, 1)
 const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)

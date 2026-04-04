@@ -42,6 +42,13 @@ var round_history: Array = []
 # Assassination tokens system
 var active_assassination_tokens: Array = []  # Array of AssassinationToken objects
 
+# Greed (treasury failure) — see game_manager.resolve_spending_totals
+var greed_events_completed: int = 0
+var greed_round: bool = false
+var greed_tax_threshold_override: int = 0
+var greed_tax_rounds_remaining: int = 0
+var last_greed_punishment_id: int = -1
+
 func _init():
     players = []
     all_policies = []

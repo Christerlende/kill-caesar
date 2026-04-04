@@ -20,6 +20,19 @@ static var last_round_number: int = 0
 static var last_player_roles: Array = []  # [{player_id, role, role_name}]
 const MAX_ASSASSINATION_TOKENS_PER_PLAYER: int = 1
 
+# Greed punishments (treasury failure)
+const GREED_ROME_BURNS: int = 0
+const GREED_ASSASSINS_DOOR: int = 1
+const GREED_HEAVY_TAXES: int = 2
+const GREED_PENDULUM: int = 3
+const GREED_CAESAR_STEPS: int = 4
+const GREED_KNIVES_OUT: int = 5
+## Max total gold on both decrees before Chaos (failure when total_spent <= T). Min spend to avoid = T+1 per row.
+const GREED_THRESHOLDS: Array = [0, 1, 2, 5, 7]
+## Five treasury failures end the game (collapse before the count would reach 5).
+const GREED_CHAOS_SLOT_COUNT: int = 5
+const GREED_COLLAPSE_WINNER: String = "collapse"
+
 @onready var state: GameState = GameState.new()
 var pending_policy_choices: Array = []
 var _discarded_policy_objects: Array = []
@@ -208,6 +221,8 @@ func _ready():
 	start_round()
 
 func create_players():
+	_game_over_handled = false
+	last_winner_text = ""
 	state.players.clear()
 	for i in range(6):
 		var p = Player.new()
@@ -229,6 +244,7 @@ func assign_roles():
 	for i in range(state.players.size()):
 		state.players[i].role = roles[i]
 		state.players[i].money = 0
+		state.players[i].caesar_plot_marks = 0
 	queued_player_roles.clear()
 
 func _has_valid_queued_roles() -> bool:
@@ -264,6 +280,10 @@ func _apply_queued_player_names() -> void:
 func start_round():
 	state.round_number += 1
 	print("Starting round %d" % state.round_number)
+	if state.greed_tax_rounds_remaining > 0:
+		state.greed_tax_rounds_remaining -= 1
+		if state.greed_tax_rounds_remaining <= 0:
+			state.greed_tax_threshold_override = 0
 	distribute_money()
 	reset_assassination_token_round_flags()
 	# make sure consul index is valid
@@ -314,10 +334,17 @@ func _base_income_for_role(role: int) -> int:
 		_:
 			return 0
 
+func _effective_tax_free_threshold() -> int:
+	var t = TAX_FREE_THRESHOLD
+	if state.greed_tax_rounds_remaining > 0 and state.greed_tax_threshold_override > 0:
+		t = min(t, state.greed_tax_threshold_override)
+	return t
+
 func _calculate_income_tax(current_money: int, base_income: int) -> int:
 	if base_income <= 0:
 		return 0
-	var excess = max(current_money - TAX_FREE_THRESHOLD, 0)
+	var threshold = _effective_tax_free_threshold()
+	var excess = max(current_money - threshold, 0)
 	if excess <= 0:
 		return 0
 	var tax_due = int(ceil(float(excess) / TAX_SLOPE_DIVISOR))
@@ -331,7 +358,16 @@ func get_income_tax_for_purse(role: int, current_money: int) -> int:
 	return _calculate_income_tax(current_money, base_income)
 
 func get_tax_free_threshold() -> int:
-	return TAX_FREE_THRESHOLD
+	return _effective_tax_free_threshold()
+
+func get_greed_treasury_threshold() -> int:
+	return GREED_THRESHOLDS[clamp(state.greed_events_completed, 0, 4)]
+
+func get_greed_min_collective_spend() -> int:
+	return get_greed_treasury_threshold() + 1
+
+func get_greed_chaos_slot_count() -> int:
+	return GREED_CHAOS_SLOT_COUNT
 
 func distribute_money():
 	for p in state.players:
@@ -608,11 +644,136 @@ func resolve_spending_totals() -> void:
 	state.spending_option_a_total = total_a
 	state.spending_option_b_total = total_b
 	print("Money vote totals A:%d B:%d" % [total_a, total_b])
-	if total_a >= total_b:
-		state.spending_winner = "A"
+	state.greed_round = false
+	var total_spent = total_a + total_b
+	var greed_T = GREED_THRESHOLDS[clamp(state.greed_events_completed, 0, 4)]
+	if total_spent <= greed_T:
+		## Fifth treasury failure: four Chaos rounds already completed; next failure ends Rome.
+		if state.greed_events_completed >= 4:
+			_trigger_rome_collapse()
+			state.spending_winner = ""
+			state.spending_stage = "resolved"
+			return
+		state.greed_round = true
+		state.spending_winner = ""
 	else:
-		state.spending_winner = "B"
+		if total_a >= total_b:
+			state.spending_winner = "A"
+		else:
+			state.spending_winner = "B"
 	state.spending_stage = "resolved"
+
+func _trigger_rome_collapse() -> void:
+	state.game_phase = "game_over"
+	last_winner_text = GREED_COLLAPSE_WINNER
+	last_patrician_influence = state.influence_patrician
+	last_plebian_influence = state.influence_plebian
+	last_round_number = state.round_number
+	_store_player_roles()
+	_game_over_handled = true
+	print("Rome collapses — fifth treasury failure.")
+
+func enter_greed_screen() -> void:
+	if state.game_phase != "spending" or not state.greed_round:
+		return
+	state.last_greed_punishment_id = roll_greed_punishment_id()
+	state.game_phase = "greed"
+
+func finish_greed_sequence() -> void:
+	if state.game_phase != "greed":
+		return
+	state.greed_events_completed += 1
+	state.game_phase = "result"
+	_record_round_history()
+
+func roll_greed_punishment_id() -> int:
+	var pool: Array = []
+	for id in range(6):
+		if id == GREED_PENDULUM and state.influence_patrician == state.influence_plebian:
+			continue
+		var w = 0.25 if id == GREED_KNIVES_OUT else 1.0
+		pool.append({"id": id, "w": w})
+	if pool.is_empty():
+		return GREED_ROME_BURNS
+	var sum_w = 0.0
+	for p in pool:
+		sum_w += p.w
+	var r = randf() * sum_w
+	for p in pool:
+		r -= p.w
+		if r <= 0.0:
+			return p.id
+	return pool[pool.size() - 1].id
+
+func apply_greed_punishment(punishment_id: int) -> void:
+	match punishment_id:
+		GREED_ROME_BURNS:
+			for pl in state.players:
+				if pl.is_dead:
+					continue
+				var loss = int(ceil(pl.money / 2.0))
+				pl.money = max(pl.money - loss, 0)
+			print("Greed: Rome burns — halved purses (rounded up loss).")
+		GREED_ASSASSINS_DOOR:
+			_greed_grant_two_distinct_random_tokens()
+			print("Greed: Assassins at the door.")
+		GREED_HEAVY_TAXES:
+			state.greed_tax_threshold_override = 20
+			state.greed_tax_rounds_remaining = 3
+			print("Greed: Heavy taxes for 3 rounds (threshold 20).")
+		GREED_PENDULUM:
+			if state.influence_patrician < state.influence_plebian:
+				state.influence_patrician += 2
+			elif state.influence_plebian < state.influence_patrician:
+				state.influence_plebian += 2
+			print("Greed: The pendulum swings.")
+		GREED_CAESAR_STEPS:
+			for pl in state.players:
+				if pl.is_dead:
+					continue
+				if pl.role == Role.CAESAR:
+					if pl.caesar_plot_marks >= 2:
+						print("Greed: Caesar steps forth — no effect (already two plot marks).")
+					else:
+						pl.money += 15
+						pl.caesar_plot_marks += 1
+						print("Greed: Caesar steps forth.")
+					break
+		GREED_KNIVES_OUT:
+			for pl in state.players:
+				if pl.is_dead:
+					continue
+				if pl.available_assassination_tokens < MAX_ASSASSINATION_TOKENS_PER_PLAYER:
+					pl.available_assassination_tokens = min(
+						pl.available_assassination_tokens + 1,
+						MAX_ASSASSINATION_TOKENS_PER_PLAYER
+					)
+			print("Greed: Knives out.")
+		_:
+			push_warning("Unknown greed punishment: %d" % punishment_id)
+
+func _grant_assassination_token_to_player_id(player_id: int) -> bool:
+	if player_id < 0 or player_id >= state.players.size():
+		return false
+	var p = state.players[player_id]
+	if p.is_dead or p.available_assassination_tokens >= MAX_ASSASSINATION_TOKENS_PER_PLAYER:
+		return false
+	p.available_assassination_tokens = min(
+		p.available_assassination_tokens + 1,
+		MAX_ASSASSINATION_TOKENS_PER_PLAYER
+	)
+	return true
+
+func _greed_grant_two_distinct_random_tokens() -> void:
+	var pool: Array = []
+	for i in range(state.players.size()):
+		if not state.players[i].is_dead and state.players[i].available_assassination_tokens < MAX_ASSASSINATION_TOKENS_PER_PLAYER:
+			pool.append(i)
+	pool.shuffle()
+	if pool.size() >= 1:
+		_grant_assassination_token_to_player_id(pool[0])
+	if pool.size() >= 2:
+		_grant_assassination_token_to_player_id(pool[1])
 
 func check_win_condition() -> void:
 	if _game_over_handled:
@@ -715,10 +876,12 @@ func apply_policy_influence(policy: Policy) -> void:
 func _record_round_history() -> void:
 	var consul_name = get_player_name(state.current_consul_index)
 	var co_consul_name = get_player_name(state.current_co_consul_index) if state.current_co_consul_index >= 0 else "None"
-	var faction = "Plebeian" if state.policy_enacted != null and state.policy_enacted.faction == Role.PLEBIAN else "Patrician"
+	var chaos = state.greed_round
+	var faction = "Chaos" if chaos else ("Plebeian" if state.policy_enacted != null and state.policy_enacted.faction == Role.PLEBIAN else "Patrician")
 	var entry = {
 		"round_number": state.round_number,
 		"faction": faction,
+		"chaos": chaos,
 		"consul_name": consul_name,
 		"co_consul_name": co_consul_name,
 	}
@@ -761,14 +924,19 @@ func progress():
 			if state.spending_stage != "resolved":
 				print("Complete private spending for all players first")
 				return
+			if state.greed_round:
+				return
 			state.game_phase = "result"
 			_record_round_history()
+		"greed":
+			return
 		"result":
 			# Effects are now applied by the result panel during fade-in animations.
 			# Apply assassination tokens (check for deaths), then advance.
 			apply_assassination_tokens()
 			check_win_condition()
 			if state.game_phase != "game_over":
+				state.greed_round = false
 				state.game_phase = "round_end"
 		"round_end":
 			process_assassination_tokens_end_of_round()

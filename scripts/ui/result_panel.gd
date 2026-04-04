@@ -7,6 +7,7 @@ const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
 const COLOR_DIM = Color(0.6, 0.55, 0.45, 0.7)
 const COLOR_RED_FACTION = Color(0.72, 0.14, 0.1, 0.85)
 const COLOR_BLUE_FACTION = Color(0.15, 0.3, 0.7, 0.85)
+const COLOR_CHAOS_FACTION = Color(0.38, 0.36, 0.34, 0.92)
 
 var game_manager = null
 
@@ -170,21 +171,34 @@ func _start_fade_in_sequence(state) -> void:
 		child.queue_free()
 
 	var items: Array = []
+	var skip_influence_and_decree = state.greed_round
 
-	# Item 1: Influence gain (always present)
+	# Item 1: Influence gain (skipped on Greed treasury-failure rounds)
 	var policy = state.policy_enacted
-	var faction_name = "Plebeian" if policy != null and policy.faction == Role.PLEBIAN else "Patrician"
-	_influence_item = Label.new()
-	_influence_item.text = "+1 %s Influence" % faction_name
-	_influence_item.add_theme_font_size_override("font_size", 22)
-	_influence_item.add_theme_color_override("font_color", COLOR_CREAM)
-	_influence_item.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_influence_item.modulate = Color(1, 1, 1, 0)
-	_right_box.add_child(_influence_item)
-	items.append({"node": _influence_item, "kind": "influence"})
+	if not skip_influence_and_decree:
+		var faction_name = "Plebeian" if policy != null and policy.faction == Role.PLEBIAN else "Patrician"
+		_influence_item = Label.new()
+		_influence_item.text = "+1 %s Influence" % faction_name
+		_influence_item.add_theme_font_size_override("font_size", 22)
+		_influence_item.add_theme_color_override("font_color", COLOR_CREAM)
+		_influence_item.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_influence_item.modulate = Color(1, 1, 1, 0)
+		_right_box.add_child(_influence_item)
+		items.append({"node": _influence_item, "kind": "influence"})
+	else:
+		_influence_item = null
+		var greed_note = Label.new()
+		greed_note.text = "The treasury failed Rome. No decree takes effect this round."
+		greed_note.add_theme_font_size_override("font_size", 20)
+		greed_note.add_theme_color_override("font_color", COLOR_DIM)
+		greed_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		greed_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		greed_note.modulate = Color(1, 1, 1, 0)
+		_right_box.add_child(greed_note)
+		items.append({"node": greed_note, "kind": "greed_note"})
 
-	# Item 2: Decree result text (if policy enacted)
-	if policy != null:
+	# Item 2: Decree result text (if policy enacted and not greed round)
+	if not skip_influence_and_decree and policy != null:
 		var result_text = ""
 		if state.spending_winner == "A":
 			result_text = policy.option_a_result_text
@@ -201,6 +215,8 @@ func _start_fade_in_sequence(state) -> void:
 			_decree_item.modulate = Color(1, 1, 1, 0)
 			_right_box.add_child(_decree_item)
 			items.append({"node": _decree_item, "kind": "decree"})
+	else:
+		_decree_item = null
 
 	var assassination_message = _build_private_assassination_message(state)
 	if assassination_message != "":
@@ -233,7 +249,9 @@ func _on_fade_sequence_finished() -> void:
 	_fade_tween = null
 
 func _on_item_visible(item_index: String) -> void:
-	if item_index == "influence" and not _influence_applied:
+	if item_index == "greed_note":
+		pass
+	elif item_index == "influence" and not _influence_applied:
 		_influence_applied = true
 		if game_manager and game_manager.state and game_manager.state.policy_enacted:
 			game_manager.apply_policy_influence(game_manager.state.policy_enacted)
@@ -324,8 +342,12 @@ func _rebuild_history(state) -> void:
 		# Faction pill
 		var pill = PanelContainer.new()
 		var pill_style = StyleBoxFlat.new()
-		var is_plebeian = entry.faction == "Plebeian"
-		pill_style.bg_color = COLOR_BLUE_FACTION if is_plebeian else COLOR_RED_FACTION
+		var is_chaos = entry.get("chaos", false) or str(entry.get("faction", "")) == "Chaos"
+		var is_plebeian = not is_chaos and entry.faction == "Plebeian"
+		if is_chaos:
+			pill_style.bg_color = COLOR_CHAOS_FACTION
+		else:
+			pill_style.bg_color = COLOR_BLUE_FACTION if is_plebeian else COLOR_RED_FACTION
 		pill_style.corner_radius_top_left = 10
 		pill_style.corner_radius_top_right = 10
 		pill_style.corner_radius_bottom_left = 10
@@ -338,7 +360,7 @@ func _rebuild_history(state) -> void:
 		pill.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 
 		var pill_label = Label.new()
-		pill_label.text = "%s Policy" % entry.faction
+		pill_label.text = "Chaos" if is_chaos else ("%s Policy" % entry.faction)
 		pill_label.add_theme_font_size_override("font_size", 14)
 		pill_label.add_theme_color_override("font_color", COLOR_CREAM)
 		pill.add_child(pill_label)

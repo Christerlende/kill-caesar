@@ -1,5 +1,8 @@
 extends Control
 
+const ROME_COLLAPSE_WINNER: String = "collapse"
+const GM = preload("res://scripts/game/game_manager.gd")
+
 var game_manager
 var round_label: Label
 var influence_label: Label
@@ -30,6 +33,7 @@ var policy_panel = null
 var spending_panel = null
 var result_panel = null
 var round_start_panel = null
+var greed_panel = null
 var info_panel = null
 var assassination_tokens_panel = null
 var _was_election_panel_active: bool = false
@@ -37,9 +41,17 @@ var _was_policy_panel_active: bool = false
 var _was_spending_panel_active: bool = false
 var _was_result_panel_active: bool = false
 var _was_round_start_panel_active: bool = false
+var _was_greed_panel_active: bool = false
+var _collapse_endgame_started: bool = false
+var _prev_game_phase_for_election_reset: String = ""
+
+var _chaos_hud_row: HBoxContainer
+var _chaos_hint_label: Label
+var _chaos_square_panels: Array = []
+var _chaos_square_styles: Array = []
 
 const ACTION_PANEL_OFFSET_LEFT: float = 375.0
-const ACTION_PANEL_OFFSET_TOP: float = 210.0
+const ACTION_PANEL_OFFSET_TOP: float = 250.0
 const ACTION_PANEL_OFFSET_RIGHT: float = -18.0
 const ACTION_PANEL_OFFSET_BOTTOM: float = -14.0
 
@@ -59,7 +71,7 @@ func _ready():
 	# grab persistent HUD elements first
 	var top_hud_panel = get_node_or_null("TopHudPanel")
 	if top_hud_panel:
-		top_hud_panel.clip_contents = true
+		top_hud_panel.clip_contents = false
 
 	round_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/RoundLabel")
 	influence_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/InfluenceLabel")
@@ -151,6 +163,12 @@ func _ready():
 		_apply_action_panel_frame(round_start_panel)
 		round_start_panel.visible = false
 
+	greed_panel = get_node_or_null("GreedPanel")
+	if greed_panel:
+		greed_panel.game_manager = game_manager
+		_apply_action_panel_frame(greed_panel)
+		greed_panel.visible = false
+
 	# connect info panel (left sidebar)
 	info_panel = get_node_or_null("InfoPanel")
 	if info_panel:
@@ -181,6 +199,7 @@ func _ready():
 		phase_info_label.visible = false
 
 	_apply_influence_bar_styles()
+	_build_chaos_counter_hud()
 
 func _apply_influence_bar_styles() -> void:
 	if not patrician_influence_bar or not plebeian_influence_bar:
@@ -217,12 +236,113 @@ func _apply_influence_bar_styles() -> void:
 	patrician_influence_bar.add_theme_stylebox_override("fill", patrician_fill)
 	plebeian_influence_bar.add_theme_stylebox_override("fill", plebeian_fill)
 
+func _build_chaos_counter_hud() -> void:
+	var hud_vbox = get_node_or_null("TopHudPanel/HudMargin/HudVBox")
+	if not hud_vbox or not game_manager:
+		return
+	var actor_prompt = actor_prompt_label if actor_prompt_label else hud_vbox.get_node_or_null("ActorPromptLabel")
+	if not actor_prompt or actor_prompt.get_parent() != hud_vbox:
+		return
+	var insert_idx: int = actor_prompt.get_index()
+	hud_vbox.remove_child(actor_prompt)
+
+	_chaos_hud_row = HBoxContainer.new()
+	_chaos_hud_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_chaos_hud_row.add_theme_constant_override("separation", 10)
+	actor_prompt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	actor_prompt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_chaos_hud_row.add_child(actor_prompt)
+
+	var block = VBoxContainer.new()
+	block.size_flags_horizontal = Control.SIZE_SHRINK_END
+	block.custom_minimum_size = Vector2(280, 0)
+	block.add_theme_constant_override("separation", 4)
+	_chaos_hud_row.add_child(block)
+
+	var title = Label.new()
+	title.text = "Chaos counter"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 13)
+	title.add_theme_color_override("font_color", Color(0.78, 0.72, 0.62, 0.95))
+	block.add_child(title)
+
+	var squares_row = HBoxContainer.new()
+	squares_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	squares_row.add_theme_constant_override("separation", 5)
+	block.add_child(squares_row)
+
+	var slot_count: int = game_manager.get_greed_chaos_slot_count()
+	_chaos_square_panels.clear()
+	_chaos_square_styles.clear()
+	for i in range(slot_count):
+		var p = PanelContainer.new()
+		p.custom_minimum_size = Vector2(18, 18)
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.22, 0.42, 0.28, 0.42)
+		style.set_border_width_all(1)
+		style.border_color = Color(0.38, 0.58, 0.44, 0.55)
+		style.corner_radius_top_left = 3
+		style.corner_radius_top_right = 3
+		style.corner_radius_bottom_left = 3
+		style.corner_radius_bottom_right = 3
+		p.add_theme_stylebox_override("panel", style)
+		squares_row.add_child(p)
+		_chaos_square_panels.append(p)
+		_chaos_square_styles.append(style)
+
+	_chaos_hint_label = Label.new()
+	_chaos_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_chaos_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_chaos_hint_label.clip_text = false
+	_chaos_hint_label.add_theme_font_size_override("font_size", 11)
+	_chaos_hint_label.add_theme_color_override("font_color", Color(0.62, 0.58, 0.52, 0.92))
+	_chaos_hint_label.visible = false
+	block.add_child(_chaos_hint_label)
+
+	hud_vbox.add_child(_chaos_hud_row)
+	hud_vbox.move_child(_chaos_hud_row, insert_idx)
+
+func _update_chaos_counter_hud(state) -> void:
+	if not _chaos_hud_row or not game_manager:
+		return
+	_chaos_hud_row.visible = state.game_phase != "game_over"
+	if not _chaos_hud_row.visible:
+		return
+	var completed: int = clampi(state.greed_events_completed, 0, game_manager.get_greed_chaos_slot_count())
+	for i in range(_chaos_square_panels.size()):
+		var filled: bool = i < completed
+		var st: StyleBoxFlat = _chaos_square_styles[i]
+		if filled:
+			st.bg_color = Color(0.40, 0.26, 0.50, 0.48)
+			st.border_color = Color(0.52, 0.38, 0.62, 0.62)
+		else:
+			st.bg_color = Color(0.22, 0.40, 0.30, 0.40)
+			st.border_color = Color(0.36, 0.55, 0.42, 0.55)
+	if state.greed_events_completed > 0:
+		var min_spend: int = game_manager.get_greed_min_collective_spend()
+		_chaos_hint_label.text = "Spend at least %d gold in total on decrees to avoid Chaos." % min_spend
+		_chaos_hint_label.visible = true
+	else:
+		_chaos_hint_label.visible = false
+
 func _process(_delta):
 	if not game_manager:
 		return
 	var state = game_manager.state
 	if not state:
 		return
+	if state.game_phase == "game_over" and GM.last_winner_text == ROME_COLLAPSE_WINNER:
+		if not _collapse_endgame_started:
+			_collapse_endgame_started = true
+			var collapse_timer = get_tree().create_timer(0.12)
+			collapse_timer.timeout.connect(_go_collapse_end_game)
+		return
+
+	# Fresh election UI each new round (fixes stale votes when election overlay was still "showing result")
+	if state.game_phase == "round_start" and _prev_game_phase_for_election_reset != "round_start":
+		if election_panel:
+			election_panel.reset_panel()
+	_prev_game_phase_for_election_reset = state.game_phase
 	if state.round_number != _last_seen_round:
 		_last_seen_round = state.round_number
 		if state.players.size() > 0:
@@ -256,6 +376,7 @@ func _process(_delta):
 		gold_gain_label.text = "Gold gain each round: %d" % _gold_gain_for_role(viewer_role)
 	if actor_prompt_label:
 		actor_prompt_label.text = _build_actor_prompt_text(state)
+	_update_chaos_counter_hud(state)
 	if election_panel:
 		_apply_action_panel_frame(election_panel)
 	if policy_panel:
@@ -264,6 +385,8 @@ func _process(_delta):
 		_apply_action_panel_frame(spending_panel)
 	if result_panel:
 		_apply_action_panel_frame(result_panel)
+	if greed_panel:
+		_apply_action_panel_frame(greed_panel)
 	# Toggle election panel vs legacy debug controls
 	var in_election = state.game_phase == "election"
 	var election_transition_active = false
@@ -299,6 +422,13 @@ func _process(_delta):
 		if policy_discard_buttons_container:
 			policy_discard_buttons_container.visible = true
 
+	var in_greed = state.game_phase == "greed"
+	if greed_panel:
+		greed_panel.visible = in_greed
+		if _was_greed_panel_active and not in_greed:
+			greed_panel.reset_panel()
+	_was_greed_panel_active = in_greed
+
 	# Toggle spending panel vs legacy spending controls
 	var in_spending = state.game_phase == "spending"
 	if spending_panel:
@@ -309,8 +439,9 @@ func _process(_delta):
 	if spending_controls_container:
 		spending_controls_container.visible = not in_spending
 
-	# Toggle result panel (keep visible during game_over so victory transition completes)
-	var in_result = state.game_phase == "result" or state.game_phase == "game_over"
+	# Toggle result panel (keep visible during game_over so victory transition completes; not for Rome collapse)
+	var collapse_over = state.game_phase == "game_over" and GM.last_winner_text == ROME_COLLAPSE_WINNER
+	var in_result = state.game_phase == "result" or (state.game_phase == "game_over" and not collapse_over)
 	if result_panel:
 		var result_viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
 		if state.game_phase == "result" and state.spending_input_player_index >= 0:
@@ -334,7 +465,7 @@ func _process(_delta):
 	_was_round_start_panel_active = in_round_start
 
 	# Toggle assassination tokens panel in the sidebar during active play, round start, and result
-	var in_assassination_mode = state.game_phase in ["round_start", "election", "policy", "spending", "result"]
+	var in_assassination_mode = state.game_phase in ["round_start", "election", "policy", "spending", "greed", "result"]
 	if assassination_tokens_panel:
 		var assassination_viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
 		if state.game_phase in ["spending", "result"] and state.spending_input_player_index >= 0:
@@ -346,6 +477,9 @@ func _process(_delta):
 	_update_election_vote_buttons(state)
 	_update_policy_discard_buttons(state)
 	_update_spending_controls(state)
+
+func _go_collapse_end_game() -> void:
+	get_tree().change_scene_to_file("res://scenes/ui/end_game.tscn")
 
 func _apply_action_panel_frame(panel: Control) -> void:
 	panel.anchor_left = 0.0
@@ -757,6 +891,8 @@ func _on_spending_pay_pressed() -> void:
 	_spending_ui_key = ""
 
 func _on_spending_continue_pressed() -> void:
+	if game_manager.state.greed_round:
+		return
 	game_manager.progress()
 	if game_manager.state.game_phase == "round_end":
 		game_manager.progress()

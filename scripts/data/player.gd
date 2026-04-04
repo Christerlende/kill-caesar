@@ -17,3 +17,5 @@ var co_consul_count: int = 0
 var gold_vote: int = 0
 var is_dead: bool = false
 var available_assassination_tokens: int = 0  # must stay in [0, 1]
+# Plots against Caesar (Greed punishment); separate from placed assassination tokens; max 2 from events
+var caesar_plot_marks: int = 0

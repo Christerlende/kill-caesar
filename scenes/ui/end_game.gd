@@ -97,6 +97,16 @@ func _clear_children() -> void:
 
 func _populate() -> void:
 	var winner = GameManager.last_winner_text
+
+	if winner == "collapse":
+		_winner_label.text = "Rome has fallen"
+		_score_label.text = "Patrician Influence: %d  |  Plebeian Influence: %d" % [
+			GameManager.last_patrician_influence,
+			GameManager.last_plebian_influence
+		]
+		_closing_label.text = "No faction claims the ruins. The republic ends not with a blade, but with a shrug."
+		return
+
 	var is_caesar_win = false
 
 	# Check if Caesar caused the win (Caesar is on the Patrician team)
@@ -122,6 +132,24 @@ func _populate() -> void:
 
 func _start_reveal_sequence() -> void:
 	var winner = GameManager.last_winner_text
+
+	if winner == "collapse":
+		for child in _reveal_box.get_children():
+			child.queue_free()
+		var collapse_body = _make_reveal_label(
+			"Rome collapses under the weight of the senate's indecision. Again and again the treasury stood empty; again and again the people were ignored. There are no victors — only ash.",
+			COLOR_DIM
+		)
+		_reveal_box.add_child(collapse_body)
+		var tween_c = create_tween()
+		tween_c.tween_interval(1.2)
+		tween_c.tween_property(collapse_body, "modulate:a", 1.0, 0.9).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		tween_c.tween_interval(1.5)
+		tween_c.tween_property(_closing_label, "modulate:a", 1.0, 0.8)
+		tween_c.tween_interval(0.4)
+		tween_c.tween_property(_buttons_box, "modulate:a", 1.0, 0.5)
+		return
+
 	var players = GameManager.last_player_roles
 
 	# Sort players into groups

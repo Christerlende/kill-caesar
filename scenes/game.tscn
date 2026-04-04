@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://n8vxy310sq81" path="res://scripts/ui/info_panel.gd" id="7"]
 [ext_resource type="Script" uid="uid://c7r3su1tp4n3l" path="res://scripts/ui/result_panel.gd" id="8"]
 [ext_resource type="Script" path="res://scripts/ui/round_start_panel.gd" id="9"]
+[ext_resource type="Script" path="res://scripts/ui/greed_panel.gd" id="10"]
 
 [node name="Game" type="Node" unique_id=1989461786]
 script = ExtResource("1")
@@ -35,7 +36,7 @@ anchor_right = 1.0
 offset_left = 18.0
 offset_top = 14.0
 offset_right = -18.0
-offset_bottom = 198.0
+offset_bottom = 238.0
 grow_horizontal = 2
 theme = ExtResource("4")
 
@@ -199,7 +200,7 @@ layout_mode = 1
 anchors_preset = 9
 anchor_bottom = 1.0
 offset_left = 14.0
-offset_top = 210.0
+offset_top = 250.0
 offset_right = 361.0
 offset_bottom = -14.0
 grow_vertical = 2
@@ -212,7 +213,7 @@ anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 375.0
-offset_top = 210.0
+offset_top = 250.0
 offset_right = -18.0
 offset_bottom = -14.0
 theme = ExtResource("4")
@@ -224,7 +225,7 @@ anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 375.0
-offset_top = 210.0
+offset_top = 250.0
 offset_right = -18.0
 offset_bottom = -14.0
 theme = ExtResource("4")
@@ -236,7 +237,7 @@ anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 375.0
-offset_top = 210.0
+offset_top = 250.0
 offset_right = -18.0
 offset_bottom = -14.0
 theme = ExtResource("4")
@@ -248,7 +249,7 @@ anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 375.0
-offset_top = 210.0
+offset_top = 250.0
 offset_right = -18.0
 offset_bottom = -14.0
 theme = ExtResource("4")
@@ -260,8 +261,20 @@ anchors_preset = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 375.0
-offset_top = 210.0
+offset_top = 250.0
 offset_right = -18.0
 offset_bottom = -14.0
 theme = ExtResource("4")
 script = ExtResource("9")
+
+[node name="GreedPanel" type="PanelContainer" parent="GameUI"]
+layout_mode = 1
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 375.0
+offset_top = 250.0
+offset_right = -18.0
+offset_bottom = -14.0
+theme = ExtResource("4")
+script = ExtResource("10")

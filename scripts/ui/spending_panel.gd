@@ -15,6 +15,7 @@ var game_manager = null
 
 var _title_label: Label
 var _subtitle_label: Label
+var _chaos_collective_label: Label
 var _options_row: HBoxContainer
 var _controls_box: VBoxContainer
 
@@ -53,6 +54,15 @@ func _ready() -> void:
 	_subtitle_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(_subtitle_label)
 
+	_chaos_collective_label = Label.new()
+	_chaos_collective_label.text = ""
+	_chaos_collective_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_chaos_collective_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_chaos_collective_label.add_theme_font_size_override("font_size", 15)
+	_chaos_collective_label.add_theme_color_override("font_color", Color(0.82, 0.72, 0.55, 0.95))
+	_chaos_collective_label.visible = false
+	root.add_child(_chaos_collective_label)
+
 	_options_row = HBoxContainer.new()
 	_options_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	_options_row.add_theme_constant_override("separation", 18)
@@ -70,13 +80,15 @@ func _process(_delta: float) -> void:
 	if not state or state.game_phase != "spending":
 		return
 
-	var ui_key = "%s|%d|%s|%d|%d|%d" % [
+	var ui_key = "%s|%d|%s|%d|%d|%d|%s|%d" % [
 		state.spending_stage,
 		state.spending_input_player_index,
 		_draft_option,
 		_draft_amount,
 		state.spending_option_a_total,
 		state.spending_option_b_total,
+		state.greed_round,
+		state.greed_events_completed,
 	]
 	if ui_key == _last_ui_key:
 		return
@@ -115,14 +127,21 @@ func _rebuild_ui(state) -> void:
 
 	if state.policy_enacted != null:
 		if state.spending_stage == "resolved":
-			_subtitle_label.text = "The people have spoken."
+			if state.greed_round:
+				_subtitle_label.text = "The treasury stands empty. Both decrees are vetoed."
+			else:
+				_subtitle_label.text = "The people have spoken."
 		else:
 			_subtitle_label.text = "Policy #%d enacted. Choose where to spend gold." % state.policy_enacted.id
 		var result_a = ""
 		var result_b = ""
 		if state.spending_stage == "resolved":
-			result_a = "won" if state.spending_winner == "A" else "lost"
-			result_b = "won" if state.spending_winner == "B" else "lost"
+			if state.greed_round:
+				result_a = "lost"
+				result_b = "lost"
+			else:
+				result_a = "won" if state.spending_winner == "A" else "lost"
+				result_b = "won" if state.spending_winner == "B" else "lost"
 		var policy_accent = _policy_accent_color(state.policy_enacted.faction)
 		var card_a = _build_option_card("A", state.policy_enacted.option_a_text, policy_accent, state, result_a)
 		var card_b = _build_option_card("B", state.policy_enacted.option_b_text, policy_accent, state, result_b)
@@ -133,7 +152,10 @@ func _rebuild_ui(state) -> void:
 			_options_row.add_child(col_b)
 			if not _resolved_animated:
 				_resolved_animated = true
-				call_deferred("_animate_resolved", card_a, card_b, state.spending_winner)
+				if state.greed_round:
+					call_deferred("_show_dual_veto_immediate", card_a, card_b)
+				else:
+					call_deferred("_animate_resolved", card_a, card_b, state.spending_winner)
 		else:
 			_options_row.add_child(card_a)
 			_options_row.add_child(card_b)
@@ -152,6 +174,23 @@ func _rebuild_ui(state) -> void:
 			waiting.text = "Waiting for spending phase..."
 			waiting.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			_controls_box.add_child(waiting)
+
+	_apply_chaos_collective_hint(state)
+
+func _apply_chaos_collective_hint(state) -> void:
+	if not _chaos_collective_label or not game_manager:
+		return
+	var show_hint: bool = (
+		state.greed_events_completed > 0
+		and state.policy_enacted != null
+		and state.spending_stage != "resolved"
+	)
+	if not show_hint:
+		_chaos_collective_label.visible = false
+		return
+	var min_spend: int = game_manager.get_greed_min_collective_spend()
+	_chaos_collective_label.text = "Spend at least %d gold in total across both decrees to avoid Chaos." % min_spend
+	_chaos_collective_label.visible = true
 
 func _policy_accent_color(faction: int) -> Color:
 	match faction:
@@ -297,6 +336,15 @@ func _build_handoff_controls(state) -> void:
 func _build_resolved_controls(state) -> void:
 	_draft_player_id = -1
 
+	if state.greed_round:
+		var wait = Label.new()
+		wait.text = "Rome takes notice…"
+		wait.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		wait.add_theme_font_size_override("font_size", 18)
+		wait.add_theme_color_override("font_color", COLOR_CREAM)
+		_controls_box.add_child(wait)
+		return
+
 	var proceed_btn = Button.new()
 	proceed_btn.text = "Proceed"
 	proceed_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -330,6 +378,17 @@ func _on_pass_pressed() -> void:
 func _on_resolved_proceed_pressed() -> void:
 	game_manager.progress()
 	_last_ui_key = ""
+
+func _show_dual_veto_immediate(card_a: PanelContainer, card_b: PanelContainer) -> void:
+	for card in [card_a, card_b]:
+		var stamp = card.get_node_or_null("Stamp")
+		if stamp:
+			stamp.modulate = Color(1, 1, 1, 1)
+		var wrap_col = card.get_parent()
+		if wrap_col:
+			var tribute = wrap_col.get_node_or_null("TributeLabel")
+			if tribute:
+				tribute.modulate = Color(1, 1, 1, 1)
 
 func _decree_number_from_option_key(option_key: String) -> String:
 	if option_key == "A":

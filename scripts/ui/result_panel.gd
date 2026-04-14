@@ -1,6 +1,7 @@
 extends PanelContainer
 
 const Role = preload("res://scripts/data/role.gd").Role
+const GameManager = preload("res://scripts/game/game_manager.gd")
 
 const COLOR_GOLD = Color(0.95, 0.82, 0.25, 1)
 const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
@@ -27,6 +28,7 @@ var _decree_applied: bool = false
 var _influence_item: Label = null
 var _decree_item: Label = null
 var _threat_item: Label = null
+var _deadlock_item: Label = null
 var _viewing_player_id: int = -1
 var _fade_tween: Tween = null
 
@@ -138,6 +140,7 @@ func reset_panel() -> void:
 	_influence_item = null
 	_decree_item = null
 	_threat_item = null
+	_deadlock_item = null
 	_continue_button.visible = false
 	for child in _history_list.get_children():
 		child.queue_free()
@@ -157,6 +160,7 @@ func set_viewing_player(player_id: int) -> void:
 	_influence_item = null
 	_decree_item = null
 	_threat_item = null
+	_deadlock_item = null
 	for child in _right_box.get_children():
 		child.queue_free()
 
@@ -171,7 +175,7 @@ func _start_fade_in_sequence(state) -> void:
 		child.queue_free()
 
 	var items: Array = []
-	var skip_influence_and_decree = state.greed_round
+	var skip_influence_and_decree = state.greed_round or state.deadlock_round
 
 	# Item 1: Influence gain (skipped on Greed treasury-failure rounds)
 	var policy = state.policy_enacted
@@ -188,7 +192,7 @@ func _start_fade_in_sequence(state) -> void:
 	else:
 		_influence_item = null
 		var greed_note = Label.new()
-		greed_note.text = "The treasury failed Rome. No decree takes effect this round."
+		greed_note.text = "The treasury failed Rome. No decree takes effect this round." if state.greed_round else "The senate deadlocked. No decree takes effect this round."
 		greed_note.add_theme_font_size_override("font_size", 20)
 		greed_note.add_theme_color_override("font_color", COLOR_DIM)
 		greed_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -217,6 +221,18 @@ func _start_fade_in_sequence(state) -> void:
 			items.append({"node": _decree_item, "kind": "decree"})
 	else:
 		_decree_item = null
+	if state.deadlock_round:
+		_deadlock_item = Label.new()
+		_deadlock_item.text = _deadlock_effect_result_text(state.last_deadlock_effect_id)
+		_deadlock_item.add_theme_font_size_override("font_size", 20)
+		_deadlock_item.add_theme_color_override("font_color", COLOR_CREAM)
+		_deadlock_item.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_deadlock_item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_deadlock_item.modulate = Color(1, 1, 1, 0)
+		_right_box.add_child(_deadlock_item)
+		items.append({"node": _deadlock_item, "kind": "deadlock"})
+	else:
+		_deadlock_item = null
 
 	var assassination_message = _build_private_assassination_message(state)
 	if assassination_message != "":
@@ -278,6 +294,19 @@ func _build_private_assassination_message(state) -> String:
 
 func _is_game_over() -> bool:
 	return game_manager and game_manager.state and game_manager.state.game_phase == "game_over"
+
+func _deadlock_effect_result_text(effect_id: int) -> String:
+	match effect_id:
+		GameManager.DEADLOCK_ASSASSINS_ROOFTOPS:
+			return "Assassins climbed the rooftops; one representative gained an assassination token."
+		GameManager.DEADLOCK_SECRET_LOBBY_PAYOUT:
+			return "A hidden lobbying purse changed hands; one representative gained 10 gold."
+		GameManager.DEADLOCK_COSTLY_LOBBYING:
+			return "Backroom lobbying took its toll; two representatives lost 5 gold each."
+		GameManager.DEADLOCK_ASSASSINS_HUNT:
+			return "Assassins marked a new target in the dark; the hunt grows deadlier."
+		_:
+			return "The deadlock sends ripples of fear through the senate."
 
 func _show_continue_button() -> void:
 	if _is_game_over():
@@ -343,8 +372,9 @@ func _rebuild_history(state) -> void:
 		var pill = PanelContainer.new()
 		var pill_style = StyleBoxFlat.new()
 		var is_chaos = entry.get("chaos", false) or str(entry.get("faction", "")) == "Chaos"
-		var is_plebeian = not is_chaos and entry.faction == "Plebeian"
-		if is_chaos:
+		var is_deadlock = entry.get("deadlock", false) or str(entry.get("faction", "")) == "Draw"
+		var is_plebeian = not is_chaos and not is_deadlock and entry.faction == "Plebeian"
+		if is_chaos or is_deadlock:
 			pill_style.bg_color = COLOR_CHAOS_FACTION
 		else:
 			pill_style.bg_color = COLOR_BLUE_FACTION if is_plebeian else COLOR_RED_FACTION
@@ -360,7 +390,7 @@ func _rebuild_history(state) -> void:
 		pill.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 
 		var pill_label = Label.new()
-		pill_label.text = "Chaos" if is_chaos else ("%s Policy" % entry.faction)
+		pill_label.text = "Chaos" if is_chaos else ("Draw" if is_deadlock else ("%s Policy" % entry.faction))
 		pill_label.add_theme_font_size_override("font_size", 14)
 		pill_label.add_theme_color_override("font_color", COLOR_CREAM)
 		pill.add_child(pill_label)

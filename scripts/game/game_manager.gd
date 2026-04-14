@@ -34,6 +34,12 @@ const GREED_CHAOS_SLOT_COUNT: int = 5
 const GREED_COLLAPSE_WINNER: String = "collapse"
 const GREED_ENTER_DELAY_SEC: float = 2.0
 
+# Deadlock events (equal spending totals, unless Greed triggers)
+const DEADLOCK_ASSASSINS_ROOFTOPS: int = 0
+const DEADLOCK_SECRET_LOBBY_PAYOUT: int = 1
+const DEADLOCK_COSTLY_LOBBYING: int = 2
+const DEADLOCK_ASSASSINS_HUNT: int = 3
+
 @onready var state: GameState = GameState.new()
 var pending_policy_choices: Array = []
 var _discarded_policy_objects: Array = []
@@ -562,6 +568,8 @@ func start_spending_phase() -> void:
 	state.spending_option_a_total = 0
 	state.spending_option_b_total = 0
 	state.spending_winner = ""
+	state.deadlock_round = false
+	state.last_deadlock_effect_id = -1
 	state.spending_private_inputs.clear()
 	state.spending_confirmed_players.clear()
 	for i in range(state.players.size()):
@@ -647,6 +655,8 @@ func resolve_spending_totals() -> void:
 	state.spending_option_b_total = total_b
 	print("Money vote totals A:%d B:%d" % [total_a, total_b])
 	state.greed_round = false
+	state.deadlock_round = false
+	state.last_deadlock_effect_id = -1
 	var total_spent = total_a + total_b
 	var greed_T = GREED_THRESHOLDS[clamp(state.greed_events_completed, 0, 4)]
 	if total_spent <= greed_T:
@@ -659,7 +669,12 @@ func resolve_spending_totals() -> void:
 		state.greed_round = true
 		state.spending_winner = ""
 	else:
-		if total_a >= total_b:
+		if total_a == total_b:
+			state.deadlock_round = true
+			state.spending_winner = "D"
+			state.last_deadlock_effect_id = roll_deadlock_effect_id()
+			apply_deadlock_effect(state.last_deadlock_effect_id)
+		elif total_a > total_b:
 			state.spending_winner = "A"
 		else:
 			state.spending_winner = "B"
@@ -766,6 +781,73 @@ func apply_greed_punishment(punishment_id: int) -> void:
 			print("Greed: Knives out.")
 		_:
 			push_warning("Unknown greed punishment: %d" % punishment_id)
+
+func roll_deadlock_effect_id() -> int:
+	return randi_range(0, 3)
+
+func apply_deadlock_effect(effect_id: int) -> void:
+	match effect_id:
+		DEADLOCK_ASSASSINS_ROOFTOPS:
+			_deadlock_grant_random_assassination_token_if_possible()
+			print("Deadlock: Assassins take to the rooftops.")
+		DEADLOCK_SECRET_LOBBY_PAYOUT:
+			_deadlock_grant_secret_lobby_payout()
+			print("Deadlock: A secret lobbying deal changes hands.")
+		DEADLOCK_COSTLY_LOBBYING:
+			_deadlock_tax_two_random_players()
+			print("Deadlock: Costly lobbying drains purses.")
+		DEADLOCK_ASSASSINS_HUNT:
+			_deadlock_add_hunt_token()
+			print("Deadlock: Assassins hunt in the dark.")
+		_:
+			push_warning("Unknown deadlock effect: %d" % effect_id)
+
+func _deadlock_grant_random_assassination_token_if_possible() -> void:
+	var pool: Array = []
+	for i in range(state.players.size()):
+		var p = state.players[i]
+		if not p.is_dead and p.available_assassination_tokens < MAX_ASSASSINATION_TOKENS_PER_PLAYER:
+			pool.append(i)
+	if pool.is_empty():
+		return
+	var player_id = pool[randi() % pool.size()]
+	_grant_assassination_token_to_player_id(player_id)
+
+func _deadlock_grant_secret_lobby_payout() -> void:
+	var alive_ids: Array = []
+	for i in range(state.players.size()):
+		if not state.players[i].is_dead:
+			alive_ids.append(i)
+	if alive_ids.is_empty():
+		return
+	var player_id = alive_ids[randi() % alive_ids.size()]
+	state.players[player_id].money += 10
+
+func _deadlock_tax_two_random_players() -> void:
+	var alive_ids: Array = []
+	for i in range(state.players.size()):
+		if not state.players[i].is_dead:
+			alive_ids.append(i)
+	alive_ids.shuffle()
+	var affected = min(2, alive_ids.size())
+	for i in range(affected):
+		var player_id = alive_ids[i]
+		state.players[player_id].money = max(state.players[player_id].money - 5, 0)
+
+func _deadlock_add_hunt_token() -> void:
+	var alive_ids: Array = []
+	for i in range(state.players.size()):
+		if not state.players[i].is_dead:
+			alive_ids.append(i)
+	if alive_ids.is_empty():
+		return
+	var target_id = alive_ids[randi() % alive_ids.size()]
+	var token = AssassinationToken.new()
+	token.attacker_id = -1
+	token.target_id = target_id
+	token.rounds_left = 3
+	token.placed_this_round = true
+	state.active_assassination_tokens.append(token)
 
 func _grant_assassination_token_to_player_id(player_id: int) -> bool:
 	if player_id < 0 or player_id >= state.players.size():
@@ -892,11 +974,13 @@ func _record_round_history() -> void:
 	var consul_name = get_player_name(state.current_consul_index)
 	var co_consul_name = get_player_name(state.current_co_consul_index) if state.current_co_consul_index >= 0 else "None"
 	var chaos = state.greed_round
-	var faction = "Chaos" if chaos else ("Plebeian" if state.policy_enacted != null and state.policy_enacted.faction == Role.PLEBIAN else "Patrician")
+	var deadlock = state.deadlock_round
+	var faction = "Draw" if deadlock else ("Chaos" if chaos else ("Plebeian" if state.policy_enacted != null and state.policy_enacted.faction == Role.PLEBIAN else "Patrician"))
 	var entry = {
 		"round_number": state.round_number,
 		"faction": faction,
 		"chaos": chaos,
+		"deadlock": deadlock,
 		"consul_name": consul_name,
 		"co_consul_name": co_consul_name,
 	}
@@ -952,6 +1036,7 @@ func progress():
 			check_win_condition()
 			if state.game_phase != "game_over":
 				state.greed_round = false
+				state.deadlock_round = false
 				state.game_phase = "round_end"
 		"round_end":
 			process_assassination_tokens_end_of_round()

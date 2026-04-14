@@ -49,6 +49,10 @@ var greed_tax_threshold_override: int = 0
 var greed_tax_rounds_remaining: int = 0
 var last_greed_punishment_id: int = -1
 
+# Deadlock (equal spending totals, unless Greed triggers first)
+var deadlock_round: bool = false
+var last_deadlock_effect_id: int = -1
+
 func _init():
     players = []
     all_policies = []

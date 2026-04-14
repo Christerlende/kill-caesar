@@ -10,6 +10,7 @@ const COLOR_PLEBEIAN_POLICY = Color(0.22, 0.42, 0.85, 0.85)
 const COLOR_PATRICIAN_POLICY = Color(0.78, 0.2, 0.14, 0.85)
 const COLOR_PARCHMENT = Color(0.85, 0.75, 0.58, 1)
 const COLOR_PARCHMENT_TEXT = Color(0.2, 0.15, 0.08, 1)
+const GameManager = preload("res://scripts/game/game_manager.gd")
 
 var game_manager = null
 
@@ -129,6 +130,8 @@ func _rebuild_ui(state) -> void:
 		if state.spending_stage == "resolved":
 			if state.greed_round:
 				_subtitle_label.text = "The treasury stands empty. Both decrees are vetoed."
+			elif state.deadlock_round:
+				_subtitle_label.text = "The senate is deadlocked. Both decrees are vetoed."
 			else:
 				_subtitle_label.text = "The people have spoken."
 		else:
@@ -137,6 +140,9 @@ func _rebuild_ui(state) -> void:
 		var result_b = ""
 		if state.spending_stage == "resolved":
 			if state.greed_round:
+				result_a = "lost"
+				result_b = "lost"
+			elif state.deadlock_round:
 				result_a = "lost"
 				result_b = "lost"
 			else:
@@ -152,7 +158,7 @@ func _rebuild_ui(state) -> void:
 			_options_row.add_child(col_b)
 			if not _resolved_animated:
 				_resolved_animated = true
-				if state.greed_round:
+				if state.greed_round or state.deadlock_round:
 					call_deferred("_show_dual_veto_immediate", card_a, card_b)
 				else:
 					call_deferred("_animate_resolved", card_a, card_b, state.spending_winner)
@@ -344,6 +350,14 @@ func _build_resolved_controls(state) -> void:
 		wait.add_theme_color_override("font_color", COLOR_CREAM)
 		_controls_box.add_child(wait)
 		return
+	if state.deadlock_round:
+		var wait = Label.new()
+		wait.text = _deadlock_resolved_text(state.last_deadlock_effect_id)
+		wait.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		wait.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		wait.add_theme_font_size_override("font_size", 18)
+		wait.add_theme_color_override("font_color", COLOR_CREAM)
+		_controls_box.add_child(wait)
 
 	var proceed_btn = Button.new()
 	proceed_btn.text = "Proceed"
@@ -396,6 +410,19 @@ func _decree_number_from_option_key(option_key: String) -> String:
 	if option_key == "B":
 		return "2"
 	return option_key
+
+func _deadlock_resolved_text(effect_id: int) -> String:
+	match effect_id:
+		GameManager.DEADLOCK_ASSASSINS_ROOFTOPS:
+			return "Assassins take to the rooftops while the senate stalls."
+		GameManager.DEADLOCK_SECRET_LOBBY_PAYOUT:
+			return "A secret lobbying deal quietly enriches one representative."
+		GameManager.DEADLOCK_COSTLY_LOBBYING:
+			return "Costly lobbying efforts drain two purses in the shadows."
+		GameManager.DEADLOCK_ASSASSINS_HUNT:
+			return "In the dark, assassins hunt a representative without warning."
+		_:
+			return "The deadlock fractures trust across the senate."
 
 func _wrap_card_with_tribute(card: PanelContainer, letter: String, state) -> VBoxContainer:
 	var is_winner = (letter == state.spending_winner)

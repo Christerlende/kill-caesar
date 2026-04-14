@@ -813,7 +813,11 @@ func _build_phase_text(state) -> String:
 		lines.append("")
 		lines.append("Gold spent on Decree 1: %d" % state.spending_option_a_total)
 		lines.append("Gold spent on Decree 2: %d" % state.spending_option_b_total)
-		lines.append(">> Decree %s wins!" % _decree_number_from_option_key(state.spending_winner))
+		# Deadlock uses spending_winner "D"; deadlock_round may already be cleared after result.
+		if state.deadlock_round or state.spending_winner == "D":
+			lines.append(">> Deadlock: both decrees are vetoed.")
+		else:
+			lines.append(">> Decree %s wins!" % _decree_number_from_option_key(state.spending_winner))
 
 	# Game over
 	if state.game_phase == "game_over":

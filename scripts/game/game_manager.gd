@@ -18,7 +18,14 @@ static var last_patrician_influence: int = 0
 static var last_plebian_influence: int = 0
 static var last_round_number: int = 0
 static var last_player_roles: Array = []  # [{player_id, role, role_name}]
+## Faction whose 7-influence win was overridden by a simultaneous Caesar victory.
+## Empty string when Caesar won without an override, or when a faction won outright.
+static var last_caesar_override_faction: String = ""
+## Full per-player snapshot for the end-game reveal: player_id, role, role_name, display_name, money,
+## available_assassination_tokens, co_consul_count, is_dead.
+static var last_player_snapshots: Array = []
 const MAX_ASSASSINATION_TOKENS_PER_PLAYER: int = 1
+const CAESAR_POLICIES_TO_WIN: int = 3
 
 # Greed punishments (treasury failure)
 const GREED_ROME_BURNS: int = 0
@@ -230,6 +237,8 @@ func _ready():
 func create_players():
 	_game_over_handled = false
 	last_winner_text = ""
+	last_caesar_override_faction = ""
+	last_player_snapshots.clear()
 	state.players.clear()
 	for i in range(6):
 		var p = Player.new()
@@ -693,12 +702,19 @@ func _on_greed_enter_delay_timeout() -> void:
 func _trigger_rome_collapse() -> void:
 	state.game_phase = "game_over"
 	last_winner_text = GREED_COLLAPSE_WINNER
+	last_caesar_override_faction = ""
 	last_patrician_influence = state.influence_patrician
 	last_plebian_influence = state.influence_plebian
 	last_round_number = state.round_number
 	_store_player_roles()
 	_game_over_handled = true
 	print("Rome collapses — fifth treasury failure.")
+
+func get_caesar_policies_enacted() -> int:
+	var caesar = _get_living_caesar()
+	if caesar == null:
+		return -1
+	return caesar.co_consul_count
 
 func enter_greed_screen() -> void:
 	if state.game_phase != "spending" or not state.greed_round:
@@ -872,21 +888,58 @@ func _greed_grant_two_distinct_random_tokens() -> void:
 	if pool.size() >= 2:
 		_grant_assassination_token_to_player_id(pool[1])
 
+func _get_living_caesar():
+	for p in state.players:
+		if p.role == Role.CAESAR and not p.is_dead:
+			return p
+	return null
+
 func check_win_condition() -> void:
 	if _game_over_handled:
 		return
-	if state.influence_patrician >= influence_to_win:
+	var pat_won: bool = state.influence_patrician >= influence_to_win
+	var pleb_won: bool = state.influence_plebian >= influence_to_win
+	var caesar = _get_living_caesar()
+	var caesar_count: int = caesar.co_consul_count if caesar != null else -1
+	var caesar_wins: bool = caesar != null and caesar_count >= CAESAR_POLICIES_TO_WIN
+
+	if caesar_wins:
+		state.game_phase = "game_over"
+		last_winner_text = "Caesar"
+		last_caesar_override_faction = ""
+		if pat_won and pleb_won:
+			## Tie-break: whichever faction had the higher influence total "claimed" victory first.
+			if state.influence_patrician >= state.influence_plebian:
+				last_caesar_override_faction = "Patricians"
+			else:
+				last_caesar_override_faction = "Plebeians"
+		elif pat_won:
+			last_caesar_override_faction = "Patricians"
+		elif pleb_won:
+			last_caesar_override_faction = "Plebeians"
+		last_patrician_influence = state.influence_patrician
+		last_plebian_influence = state.influence_plebian
+		last_round_number = state.round_number
+		_store_player_roles()
+		_game_over_handled = true
+		if last_caesar_override_faction != "":
+			print("Caesar seizes power at the eleventh hour — overriding %s victory." % last_caesar_override_faction)
+		else:
+			print("Caesar wins! Three policies enacted under his co-consulship.")
+	elif pat_won:
 		state.game_phase = "game_over"
 		last_winner_text = "Patricians"
+		last_caesar_override_faction = ""
 		last_patrician_influence = state.influence_patrician
 		last_plebian_influence = state.influence_plebian
 		last_round_number = state.round_number
 		_store_player_roles()
 		_game_over_handled = true
 		print("Patricians win! Influence reached %d" % state.influence_patrician)
-	elif state.influence_plebian >= influence_to_win:
+	elif pleb_won:
 		state.game_phase = "game_over"
 		last_winner_text = "Plebeians"
+		last_caesar_override_faction = ""
 		last_patrician_influence = state.influence_patrician
 		last_plebian_influence = state.influence_plebian
 		last_round_number = state.round_number
@@ -896,11 +949,22 @@ func check_win_condition() -> void:
 
 func _store_player_roles() -> void:
 	last_player_roles.clear()
+	last_player_snapshots.clear()
 	for p in state.players:
 		last_player_roles.append({
 			"player_id": p.player_id,
 			"role": p.role,
 			"role_name": role_name(p.role),
+		})
+		last_player_snapshots.append({
+			"player_id": p.player_id,
+			"role": p.role,
+			"role_name": role_name(p.role),
+			"display_name": get_player_name(p.player_id),
+			"money": p.money,
+			"available_assassination_tokens": p.available_assassination_tokens,
+			"co_consul_count": p.co_consul_count,
+			"is_dead": p.is_dead,
 		})
 
 func apply_enacted_decree_effect(policy: Policy, option_key: String) -> void:

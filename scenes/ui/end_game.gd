@@ -6,6 +6,7 @@ const Role = preload("res://scripts/data/role.gd").Role
 const COLOR_GOLD = Color(0.95, 0.82, 0.25, 1)
 const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
 const COLOR_DIM = Color(0.6, 0.55, 0.45, 0.7)
+const COLOR_DEAD = Color(0.45, 0.42, 0.40, 0.75)
 const COLOR_RED = Color(0.76, 0.16, 0.12, 1)
 const COLOR_BLUE = Color(0.2, 0.36, 0.82, 1)
 
@@ -107,27 +108,20 @@ func _populate() -> void:
 		_closing_label.text = "No faction claims the ruins. The republic ends not with a blade, but with a shrug."
 		return
 
-	var is_caesar_win = false
-
-	# Check if Caesar caused the win (Caesar is on the Patrician team)
-	# Caesar wins if Patricians win
-	if winner == "Patricians":
-		# Check if there's a Caesar in the game
-		for p in GameManager.last_player_roles:
-			if p.role == Role.CAESAR:
-				is_caesar_win = true
-				break
-
-	if is_caesar_win:
+	if winner == "Caesar":
 		_winner_label.text = "Caesar Wins!"
-	else:
-		_winner_label.text = "%s Win!" % winner
+		_score_label.text = "Patrician Influence: %d  |  Plebeian Influence: %d" % [
+			GameManager.last_patrician_influence,
+			GameManager.last_plebian_influence
+		]
+		_closing_label.text = "Vae victis. The Republic is dead; the Empire begins."
+		return
 
+	_winner_label.text = "%s Win!" % winner
 	_score_label.text = "Patrician Influence: %d  |  Plebeian Influence: %d" % [
 		GameManager.last_patrician_influence,
 		GameManager.last_plebian_influence
 	]
-
 	_closing_label.text = "Sic semper res publica. May Rome endure."
 
 func _start_reveal_sequence() -> void:
@@ -141,95 +135,232 @@ func _start_reveal_sequence() -> void:
 			COLOR_DIM
 		)
 		_reveal_box.add_child(collapse_body)
+		var full_reveal_nodes_c: Array = _build_full_reveal_rows()
 		var tween_c = create_tween()
 		tween_c.tween_interval(1.2)
 		tween_c.tween_property(collapse_body, "modulate:a", 1.0, 0.9).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-		tween_c.tween_interval(1.5)
+		for node in full_reveal_nodes_c:
+			tween_c.tween_interval(0.45)
+			tween_c.tween_property(node, "modulate:a", 1.0, 0.55).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+		tween_c.tween_interval(1.2)
 		tween_c.tween_property(_closing_label, "modulate:a", 1.0, 0.8)
 		tween_c.tween_interval(0.4)
 		tween_c.tween_property(_buttons_box, "modulate:a", 1.0, 0.5)
 		return
 
-	var players = GameManager.last_player_roles
+	var snapshots = _get_snapshots()
 
-	# Sort players into groups
-	var winning_players: Array = []
-	var losing_players: Array = []
-	var caesar_player: Dictionary = {}
+	# Top-of-reveal headline row(s) grouped by side.
+	var headline_tween_nodes: Array = []
 
-	if winner == "Patricians":
-		for p in players:
-			if p.role == Role.CAESAR:
-				caesar_player = p
-			elif p.role == Role.PATRICIAN:
-				winning_players.append(p)
-			else:
-				losing_players.append(p)
-	else:  # Plebeians win
-		for p in players:
-			if p.role == Role.CAESAR:
-				caesar_player = p
-			elif p.role == Role.PLEBIAN:
-				winning_players.append(p)
-			else:
-				losing_players.append(p)
+	if winner == "Caesar":
+		var caesar_snap = _find_snapshot_by_role(snapshots, Role.CAESAR)
+		var caesar_name = _snapshot_display_name(caesar_snap)
+		var headline = _make_reveal_label(
+			"Caesar: %s has seized Rome." % caesar_name,
+			COLOR_GOLD
+		)
+		_reveal_box.add_child(headline)
+		headline_tween_nodes.append(headline)
 
-	# Build reveal labels
-	var winner_names = _format_player_names(winning_players)
-	var loser_names = _format_player_names(losing_players)
-	var caesar_name = "Player %d" % (caesar_player.player_id + 1) if caesar_player.size() > 0 else "Unknown"
+		var override_faction: String = GameManager.last_caesar_override_faction
+		var sub_text: String
+		if override_faction != "":
+			sub_text = "The %s were within a breath of victory — but Caesar took the final vote for himself." % override_faction
+		else:
+			sub_text = "Three times the senate bowed. Three times Caesar slipped through the doors of power."
+		var sub_label = _make_reveal_label(sub_text, COLOR_CREAM)
+		_reveal_box.add_child(sub_label)
+		headline_tween_nodes.append(sub_label)
+	else:
+		var winning_role_id: int = Role.PATRICIAN if winner == "Patricians" else Role.PLEBIAN
+		var losing_role_id: int = Role.PLEBIAN if winner == "Patricians" else Role.PATRICIAN
+		var winners_snaps: Array = _filter_snapshots_by_role(snapshots, winning_role_id)
+		var losers_snaps: Array = _filter_snapshots_by_role(snapshots, losing_role_id)
+		var caesar_snap2 = _find_snapshot_by_role(snapshots, Role.CAESAR)
 
-	var winning_role = "Patricians" if winner == "Patricians" else "Plebeians"
-	var losing_role = "Plebeians" if winner == "Patricians" else "Patricians"
+		var winning_role_name = "Patricians" if winner == "Patricians" else "Plebeians"
+		var losing_role_name = "Plebeians" if winner == "Patricians" else "Patricians"
 
-	_winners_label = _make_reveal_label(
-		"%s: %s have seized control of Rome." % [winning_role, winner_names],
-		COLOR_GOLD
-	)
-	_reveal_box.add_child(_winners_label)
+		_winners_label = _make_reveal_label(
+			"%s: %s have seized control of Rome." % [winning_role_name, _format_snapshot_names(winners_snaps)],
+			COLOR_GOLD
+		)
+		_reveal_box.add_child(_winners_label)
+		headline_tween_nodes.append(_winners_label)
 
-	_losers_label = _make_reveal_label(
-		"%s: %s." % [losing_role, loser_names],
-		COLOR_DIM
-	)
-	_reveal_box.add_child(_losers_label)
+		_losers_label = _make_reveal_label(
+			"%s: %s." % [losing_role_name, _format_snapshot_names(losers_snaps)],
+			COLOR_DIM
+		)
+		_reveal_box.add_child(_losers_label)
+		headline_tween_nodes.append(_losers_label)
 
-	_caesar_label = _make_reveal_label(
-		"Caesar: %s." % caesar_name,
-		COLOR_RED
-	)
-	_reveal_box.add_child(_caesar_label)
+		if caesar_snap2.size() > 0:
+			_caesar_label = _make_reveal_label(
+				"Caesar: %s." % _snapshot_display_name(caesar_snap2),
+				COLOR_RED
+			)
+			_reveal_box.add_child(_caesar_label)
+			headline_tween_nodes.append(_caesar_label)
 
-	# Tween chain
+	# Full reveal: every player's role, purse, assassin token.
+	var full_reveal_nodes: Array = _build_full_reveal_rows()
+
+	# Tween chain.
 	var tween = create_tween()
 
-	# t=2s: Reveal winners
-	tween.tween_interval(2.0)
-	tween.tween_property(_winners_label, "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	# Initial pause before the first headline.
+	tween.tween_interval(1.6)
+	for i in range(headline_tween_nodes.size()):
+		if i > 0:
+			tween.tween_interval(1.0)
+		tween.tween_property(headline_tween_nodes[i], "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
-	# t=4s: Reveal losers
-	tween.tween_interval(1.2)
-	tween.tween_property(_losers_label, "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	# Full per-player reveal — each row fades in in sequence.
+	for node in full_reveal_nodes:
+		tween.tween_interval(0.45)
+		tween.tween_property(node, "modulate:a", 1.0, 0.55).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
-	# t=5s: Reveal Caesar
-	tween.tween_interval(0.2)
-	tween.tween_property(_caesar_label, "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-
-	# t=8s: Closing text + buttons
-	tween.tween_interval(2.2)
+	# Closing text + buttons.
+	tween.tween_interval(1.6)
 	tween.tween_property(_closing_label, "modulate:a", 1.0, 0.8).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	tween.tween_interval(0.5)
 	tween.tween_property(_buttons_box, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
-func _format_player_names(players: Array) -> String:
+func _get_snapshots() -> Array:
+	if GameManager.last_player_snapshots.size() > 0:
+		return GameManager.last_player_snapshots
+	## Back-compat fallback: older code paths only stored last_player_roles.
+	var fallback: Array = []
+	for p in GameManager.last_player_roles:
+		fallback.append({
+			"player_id": p.player_id,
+			"role": p.role,
+			"role_name": p.get("role_name", ""),
+			"display_name": "Player %d" % (p.player_id + 1),
+			"money": 0,
+			"available_assassination_tokens": 0,
+			"co_consul_count": 0,
+			"is_dead": false,
+		})
+	return fallback
+
+func _filter_snapshots_by_role(snapshots: Array, role_id: int) -> Array:
+	var out: Array = []
+	for s in snapshots:
+		if s.role == role_id:
+			out.append(s)
+	return out
+
+func _find_snapshot_by_role(snapshots: Array, role_id: int) -> Dictionary:
+	for s in snapshots:
+		if s.role == role_id:
+			return s
+	return {}
+
+func _snapshot_display_name(snap: Dictionary) -> String:
+	if snap.size() == 0:
+		return "Unknown"
+	var name_str: String = str(snap.get("display_name", "")).strip_edges()
+	if name_str == "":
+		name_str = "Player %d" % (int(snap.get("player_id", 0)) + 1)
+	return name_str
+
+func _format_snapshot_names(snapshots: Array) -> String:
 	var names: Array = []
-	for p in players:
-		names.append("Player %d" % (p.player_id + 1))
+	for s in snapshots:
+		names.append(_snapshot_display_name(s))
 	if names.size() == 0:
 		return "None"
 	if names.size() == 1:
 		return names[0]
 	return ", ".join(names.slice(0, names.size() - 1)) + " & " + names[names.size() - 1]
+
+func _role_color(role: int) -> Color:
+	match role:
+		Role.CAESAR:
+			return COLOR_GOLD
+		Role.PATRICIAN:
+			return COLOR_RED
+		Role.PLEBIAN:
+			return COLOR_BLUE
+		_:
+			return COLOR_CREAM
+
+func _role_label_name(role: int) -> String:
+	match role:
+		Role.CAESAR:
+			return "Caesar"
+		Role.PATRICIAN:
+			return "Patrician"
+		Role.PLEBIAN:
+			return "Plebeian"
+		_:
+			return "Unknown"
+
+func _build_full_reveal_rows() -> Array:
+	var snapshots = _get_snapshots()
+	if snapshots.is_empty():
+		return []
+
+	var section_header = Label.new()
+	section_header.text = "— The Senate Revealed —"
+	section_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	section_header.add_theme_font_size_override("font_size", 18)
+	section_header.add_theme_color_override("font_color", COLOR_GOLD)
+	section_header.modulate = Color(1, 1, 1, 0)
+	_reveal_box.add_child(section_header)
+
+	var rows: Array = [section_header]
+	for snap in snapshots:
+		var row = _build_player_reveal_row(snap)
+		_reveal_box.add_child(row)
+		rows.append(row)
+	return rows
+
+func _build_player_reveal_row(snap: Dictionary) -> Control:
+	var is_dead: bool = bool(snap.get("is_dead", false))
+	var role_id: int = int(snap.get("role", Role.PLEBIAN))
+	var row = HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 14)
+	row.modulate = Color(1, 1, 1, 0)
+
+	var name_label = Label.new()
+	name_label.text = _snapshot_display_name(snap)
+	name_label.add_theme_font_size_override("font_size", 15)
+	name_label.add_theme_color_override("font_color", COLOR_DEAD if is_dead else COLOR_CREAM)
+	name_label.custom_minimum_size = Vector2(160, 0)
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	row.add_child(name_label)
+
+	var role_label = Label.new()
+	var role_text: String = _role_label_name(role_id)
+	if is_dead:
+		role_text += " (dead)"
+	role_label.text = role_text
+	role_label.add_theme_font_size_override("font_size", 15)
+	role_label.add_theme_color_override("font_color", COLOR_DEAD if is_dead else _role_color(role_id))
+	role_label.custom_minimum_size = Vector2(140, 0)
+	row.add_child(role_label)
+
+	var purse_label = Label.new()
+	purse_label.text = "Purse: %d gold" % int(snap.get("money", 0))
+	purse_label.add_theme_font_size_override("font_size", 15)
+	purse_label.add_theme_color_override("font_color", COLOR_DEAD if is_dead else COLOR_GOLD)
+	purse_label.custom_minimum_size = Vector2(140, 0)
+	row.add_child(purse_label)
+
+	var token_label = Label.new()
+	var tokens_held: int = int(snap.get("available_assassination_tokens", 0))
+	token_label.text = "Assassin token: %s" % ("yes" if tokens_held > 0 else "no")
+	token_label.add_theme_font_size_override("font_size", 15)
+	token_label.add_theme_color_override("font_color", COLOR_DEAD if is_dead else (COLOR_RED if tokens_held > 0 else COLOR_DIM))
+	token_label.custom_minimum_size = Vector2(160, 0)
+	row.add_child(token_label)
+
+	return row
 
 func _make_reveal_label(text: String, color: Color) -> Label:
 	var l = Label.new()

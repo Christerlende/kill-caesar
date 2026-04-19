@@ -234,6 +234,18 @@ func _start_fade_in_sequence(state) -> void:
 	else:
 		_deadlock_item = null
 
+	var caesar_line = _build_caesar_override_line(state)
+	if caesar_line != "":
+		var caesar_item = Label.new()
+		caesar_item.text = caesar_line
+		caesar_item.add_theme_font_size_override("font_size", 24)
+		caesar_item.add_theme_color_override("font_color", COLOR_GOLD)
+		caesar_item.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		caesar_item.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		caesar_item.modulate = Color(1, 1, 1, 0)
+		_right_box.add_child(caesar_item)
+		items.append({"node": caesar_item, "kind": "caesar"})
+
 	var assassination_message = _build_private_assassination_message(state)
 	if assassination_message != "":
 		_threat_item = Label.new()
@@ -276,6 +288,34 @@ func _on_item_visible(item_index: String) -> void:
 		_decree_applied = true
 		if game_manager and game_manager.state and game_manager.state.policy_enacted:
 			game_manager.apply_enacted_decree_effect(game_manager.state.policy_enacted, game_manager.state.spending_winner)
+
+func _build_caesar_override_line(state) -> String:
+	## Predict (at fade-build time) whether a Caesar override will fire this round:
+	## Caesar must be alive with >= CAESAR_POLICIES_TO_WIN successful co-consul elections,
+	## the round must enact a policy (+1 influence), and that influence must push a faction
+	## to >= influence_to_win.
+	if state == null or state.greed_round or state.deadlock_round:
+		return ""
+	var policy = state.policy_enacted
+	if policy == null:
+		return ""
+	var caesar = null
+	for p in state.players:
+		if p.role == Role.CAESAR and not p.is_dead:
+			caesar = p
+			break
+	if caesar == null or caesar.co_consul_count < 3:
+		return ""
+	var faction_name: String = ""
+	if policy.faction == Role.PATRICIAN:
+		if state.influence_patrician + 1 >= GameManager.influence_to_win:
+			faction_name = "Patricians"
+	else:
+		if state.influence_plebian + 1 >= GameManager.influence_to_win:
+			faction_name = "Plebeians"
+	if faction_name == "":
+		return ""
+	return "The %s had already begun their triumph — yet in the eleventh hour, Caesar seizes the final vote, and Rome kneels before him alone." % faction_name
 
 func _build_private_assassination_message(state) -> String:
 	if not game_manager:

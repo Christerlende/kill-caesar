@@ -150,6 +150,10 @@ func reset_panel() -> void:
 func set_viewing_player(player_id: int) -> void:
 	if _viewing_player_id == player_id:
 		return
+	## Once the game is over, lock the current viewer. Swapping here would kill the
+	## fade tween mid-sequence and leave the panel frozen with no continue button.
+	if _is_game_over():
+		return
 	_viewing_player_id = player_id
 	if _fade_tween:
 		_fade_tween.kill()
@@ -234,7 +238,7 @@ func _start_fade_in_sequence(state) -> void:
 	else:
 		_deadlock_item = null
 
-	var caesar_line = _build_caesar_override_line(state)
+	var caesar_line = _build_caesar_win_line(state)
 	if caesar_line != "":
 		var caesar_item = Label.new()
 		caesar_item.text = caesar_line
@@ -288,16 +292,17 @@ func _on_item_visible(item_index: String) -> void:
 		_decree_applied = true
 		if game_manager and game_manager.state and game_manager.state.policy_enacted:
 			game_manager.apply_enacted_decree_effect(game_manager.state.policy_enacted, game_manager.state.spending_winner)
+	elif item_index == "caesar":
+		## Ensures game_phase flips to "game_over" during the fade on deadlock/greed rounds
+		## (where no influence callback runs), so the auto-transition to the end screen fires.
+		if game_manager:
+			game_manager.check_win_condition()
 
-func _build_caesar_override_line(state) -> String:
-	## Predict (at fade-build time) whether a Caesar override will fire this round:
-	## Caesar must be alive with >= CAESAR_POLICIES_TO_WIN successful co-consul elections,
-	## the round must enact a policy (+1 influence), and that influence must push a faction
-	## to >= influence_to_win.
-	if state == null or state.greed_round or state.deadlock_round:
-		return ""
-	var policy = state.policy_enacted
-	if policy == null:
+func _build_caesar_win_line(state) -> String:
+	## Announce Caesar's win on the result screen whenever his 3rd-co-consul win lands this round.
+	## Predicted at fade-build time (Caesar's co_consul_count was already incremented during the
+	## election phase, so it is final by the time the result panel builds its items).
+	if state == null:
 		return ""
 	var caesar = null
 	for p in state.players:
@@ -306,16 +311,23 @@ func _build_caesar_override_line(state) -> String:
 			break
 	if caesar == null or caesar.co_consul_count < 3:
 		return ""
-	var faction_name: String = ""
-	if policy.faction == Role.PATRICIAN:
-		if state.influence_patrician + 1 >= GameManager.influence_to_win:
-			faction_name = "Patricians"
-	else:
-		if state.influence_plebian + 1 >= GameManager.influence_to_win:
-			faction_name = "Plebeians"
-	if faction_name == "":
-		return ""
-	return "The %s had already begun their triumph — yet in the eleventh hour, Caesar seizes the final vote, and Rome kneels before him alone." % faction_name
+
+	## Override case: a policy is being enacted this round and the +1 influence would have
+	## otherwise handed a faction their 7-influence victory.
+	if not state.greed_round and not state.deadlock_round and state.policy_enacted != null:
+		var policy = state.policy_enacted
+		var override_faction: String = ""
+		if policy.faction == Role.PATRICIAN:
+			if state.influence_patrician + 1 >= GameManager.influence_to_win:
+				override_faction = "Patricians"
+		else:
+			if state.influence_plebian + 1 >= GameManager.influence_to_win:
+				override_faction = "Plebeians"
+		if override_faction != "":
+			return "The %s had already begun their triumph — yet in the eleventh hour, Caesar seizes the final vote, and Rome kneels before him alone." % override_faction
+
+	## Non-override case: Caesar simply reaches his third co-consulship this round.
+	return "Three times the senate has bowed to him. Caesar needs no faction — Rome is already his."
 
 func _build_private_assassination_message(state) -> String:
 	if not game_manager:

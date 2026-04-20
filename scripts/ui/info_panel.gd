@@ -69,16 +69,16 @@ func _ready() -> void:
 	_intel_section.add_theme_constant_override("separation", 6)
 	root.add_child(_intel_section)
 
-	# --- Spacer to push scroll buttons to bottom ---
-	var spacer = Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(spacer)
-
-	# --- Lower sidebar content ---
+	# --- Lower sidebar content (packs directly under Intelligence) ---
 	_lower_content_section = VBoxContainer.new()
 	_lower_content_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_lower_content_section.add_theme_constant_override("separation", 8)
 	root.add_child(_lower_content_section)
+
+	# --- Expanding spacer sits below the assassin panel so the scroll buttons stay at the bottom ---
+	var spacer = Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(spacer)
 
 	# --- Scroll Buttons ---
 	var scroll_row = HBoxContainer.new()

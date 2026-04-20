@@ -13,6 +13,8 @@ const Role = preload("res://scripts/data/role.gd").Role
 # runtime state
 var is_consul: bool = false
 var is_co_consul: bool = false
+## Number of successful co-consul elections for this player.
+## Also drives the Caesar win condition: Caesar wins when his co_consul_count reaches CAESAR_POLICIES_TO_WIN.
 var co_consul_count: int = 0
 var gold_vote: int = 0
 var is_dead: bool = false

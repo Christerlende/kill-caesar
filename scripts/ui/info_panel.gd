@@ -1,6 +1,7 @@
 extends PanelContainer
 
 const Role = preload("res://scripts/data/role.gd").Role
+const GameManager = preload("res://scripts/game/game_manager.gd")
 
 const COLOR_GOLD = Color(0.95, 0.82, 0.25, 1)
 const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
@@ -17,6 +18,8 @@ var _purse_amount_label: Label
 var _income_label: Label
 var _tax_hint_label: Label
 var _intel_section: VBoxContainer
+var _policies_section: VBoxContainer
+var _policies_square_styles: Array = []
 var _lower_content_section: VBoxContainer
 var _rules_popup: PanelContainer
 var _howtowin_popup: PanelContainer
@@ -58,21 +61,25 @@ func _ready() -> void:
 
 	root.add_child(HSeparator.new())
 
+	# --- Caesar Policies-Enacted Counter (only visible to Caesar) ---
+	_policies_section = _build_policies_section()
+	root.add_child(_policies_section)
+
 	# --- Role Intel Section ---
 	_intel_section = VBoxContainer.new()
 	_intel_section.add_theme_constant_override("separation", 6)
 	root.add_child(_intel_section)
 
-	# --- Spacer to push scroll buttons to bottom ---
-	var spacer = Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(spacer)
-
-	# --- Lower sidebar content ---
+	# --- Lower sidebar content (packs directly under Intelligence) ---
 	_lower_content_section = VBoxContainer.new()
 	_lower_content_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_lower_content_section.add_theme_constant_override("separation", 8)
 	root.add_child(_lower_content_section)
+
+	# --- Expanding spacer sits below the assassin panel so the scroll buttons stay at the bottom ---
+	var spacer = Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	root.add_child(spacer)
 
 	# --- Scroll Buttons ---
 	var scroll_row = HBoxContainer.new()
@@ -155,6 +162,50 @@ func _build_purse_section() -> PanelContainer:
 	col.add_child(_tax_hint_label)
 
 	return card
+
+func _build_policies_section() -> VBoxContainer:
+	var section = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 4)
+	section.visible = false
+
+	var header = Label.new()
+	header.text = "Policies enacted"
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.add_theme_font_size_override("font_size", 16)
+	header.add_theme_color_override("font_color", COLOR_GOLD)
+	section.add_child(header)
+
+	var subtext = Label.new()
+	subtext.text = "Get three policies enacted as co-consul to win."
+	subtext.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtext.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	subtext.add_theme_font_size_override("font_size", 11)
+	subtext.add_theme_color_override("font_color", COLOR_DIM)
+	section.add_child(subtext)
+
+	var squares_row = HBoxContainer.new()
+	squares_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	squares_row.add_theme_constant_override("separation", 8)
+	section.add_child(squares_row)
+
+	_policies_square_styles.clear()
+	for i in range(GameManager.CAESAR_POLICIES_TO_WIN):
+		var p = PanelContainer.new()
+		p.custom_minimum_size = Vector2(26, 26)
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.22, 0.14, 0.08, 0.55)
+		style.set_border_width_all(1)
+		style.border_color = Color(0.6, 0.48, 0.2, 0.6)
+		style.corner_radius_top_left = 4
+		style.corner_radius_top_right = 4
+		style.corner_radius_bottom_left = 4
+		style.corner_radius_bottom_right = 4
+		p.add_theme_stylebox_override("panel", style)
+		squares_row.add_child(p)
+		_policies_square_styles.append(style)
+
+	section.add_child(HSeparator.new())
+	return section
 
 func _build_scroll_button(text: String) -> Button:
 	var btn = Button.new()
@@ -254,13 +305,14 @@ func _process(_delta: float) -> void:
 
 	_viewer_index = _get_viewer_index(state)
 	var player = state.players[_viewer_index]
-	var ui_key = "%d|%d|%d" % [_viewer_index, player.money, player.role]
+	var ui_key = "%d|%d|%d|%d" % [_viewer_index, player.money, player.role, player.co_consul_count]
 	if ui_key == _last_ui_key:
 		return
 	_last_ui_key = ui_key
 
 	_update_role_title(player)
 	_update_purse(player)
+	_update_policies_section(player)
 	_update_intel(state, player)
 
 func _get_viewer_index(state) -> int:
@@ -330,6 +382,23 @@ func _update_purse(player) -> void:
 	if _tax_hint_label:
 		_tax_hint_label.text = "Taxes start above %d gold and reduce income." % tax_threshold
 
+func _update_policies_section(player) -> void:
+	if not _policies_section:
+		return
+	if player.role != Role.CAESAR:
+		_policies_section.visible = false
+		return
+	_policies_section.visible = true
+	var filled: int = clamp(player.co_consul_count, 0, GameManager.CAESAR_POLICIES_TO_WIN)
+	for i in range(_policies_square_styles.size()):
+		var st: StyleBoxFlat = _policies_square_styles[i]
+		if i < filled:
+			st.bg_color = COLOR_GOLD
+			st.border_color = Color(1.0, 0.92, 0.55, 0.95)
+		else:
+			st.bg_color = Color(0.22, 0.14, 0.08, 0.55)
+			st.border_color = Color(0.6, 0.48, 0.2, 0.6)
+
 func _update_intel(state, player) -> void:
 	for child in _intel_section.get_children():
 		child.queue_free()
@@ -343,14 +412,47 @@ func _update_intel(state, player) -> void:
 			header.add_theme_color_override("font_color", COLOR_GOLD)
 			_intel_section.add_child(header)
 
+			var columns = HBoxContainer.new()
+			columns.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			columns.add_theme_constant_override("separation", 10)
+			_intel_section.add_child(columns)
+
+			var pleb_col = VBoxContainer.new()
+			pleb_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			pleb_col.add_theme_constant_override("separation", 2)
+			columns.add_child(pleb_col)
+
+			var pat_col = VBoxContainer.new()
+			pat_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			pat_col.add_theme_constant_override("separation", 2)
+			columns.add_child(pat_col)
+
+			var pleb_header = Label.new()
+			pleb_header.text = "Plebeians"
+			pleb_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			pleb_header.add_theme_font_size_override("font_size", 12)
+			pleb_header.add_theme_color_override("font_color", _role_color(Role.PLEBIAN))
+			pleb_col.add_child(pleb_header)
+
+			var pat_header = Label.new()
+			pat_header.text = "Patricians"
+			pat_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			pat_header.add_theme_font_size_override("font_size", 12)
+			pat_header.add_theme_color_override("font_color", _role_color(Role.PATRICIAN))
+			pat_col.add_child(pat_header)
+
 			for p in state.players:
 				if p.player_id == player.player_id:
 					continue
 				var line = Label.new()
-				line.text = "%s — %s" % [game_manager.get_player_name(p.player_id), _intel_role_name(p.role)]
+				line.text = game_manager.get_player_name(p.player_id)
 				line.add_theme_font_size_override("font_size", 13)
 				line.add_theme_color_override("font_color", _role_color(p.role))
-				_intel_section.add_child(line)
+				line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				if p.role == Role.PLEBIAN:
+					pleb_col.add_child(line)
+				elif p.role == Role.PATRICIAN:
+					pat_col.add_child(line)
 
 		Role.PATRICIAN:
 			var header = Label.new()

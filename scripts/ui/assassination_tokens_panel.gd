@@ -27,13 +27,13 @@ func _ready() -> void:
 	
 	var margin = MarginContainer.new()
 	margin.add_theme_constant_override("margin_left", 12)
-	margin.add_theme_constant_override("margin_top", 12)
+	margin.add_theme_constant_override("margin_top", 10)
 	margin.add_theme_constant_override("margin_right", 12)
-	margin.add_theme_constant_override("margin_bottom", 12)
+	margin.add_theme_constant_override("margin_bottom", 6)
 	add_child(margin)
 	
 	var vbox = VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
+	vbox.add_theme_constant_override("separation", 10)
 	margin.add_child(vbox)
 	
 	# ─── Assassination Counter Section ───
@@ -159,10 +159,13 @@ func _process(_delta: float) -> void:
 	# Show rounds left if player has a token waiting to be placed
 	if viewer.is_dead:
 		_rounds_left_label.text = "You are dead"
+		_rounds_left_label.visible = true
 	elif my_tokens > 0:
 		_rounds_left_label.text = "Ready to place"
+		_rounds_left_label.visible = true
 	else:
 		_rounds_left_label.text = ""
+		_rounds_left_label.visible = false
 
 func _on_place_token_pressed() -> void:
 	if viewing_player_id < 0:

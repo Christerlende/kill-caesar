@@ -710,12 +710,6 @@ func _trigger_rome_collapse() -> void:
 	_game_over_handled = true
 	print("Rome collapses — fifth treasury failure.")
 
-func get_caesar_policies_enacted() -> int:
-	var caesar = _get_living_caesar()
-	if caesar == null:
-		return -1
-	return caesar.co_consul_count
-
 func enter_greed_screen() -> void:
 	if state.game_phase != "spending" or not state.greed_round:
 		return

@@ -1,6 +1,7 @@
 extends PanelContainer
 
 const Role = preload("res://scripts/data/role.gd").Role
+const GameManager = preload("res://scripts/game/game_manager.gd")
 
 const COLOR_GOLD = Color(0.95, 0.82, 0.25, 1)
 const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
@@ -188,7 +189,7 @@ func _build_policies_section() -> VBoxContainer:
 	section.add_child(squares_row)
 
 	_policies_square_styles.clear()
-	for i in range(3):
+	for i in range(GameManager.CAESAR_POLICIES_TO_WIN):
 		var p = PanelContainer.new()
 		p.custom_minimum_size = Vector2(26, 26)
 		var style = StyleBoxFlat.new()
@@ -388,7 +389,7 @@ func _update_policies_section(player) -> void:
 		_policies_section.visible = false
 		return
 	_policies_section.visible = true
-	var filled: int = clamp(player.co_consul_count, 0, 3)
+	var filled: int = clamp(player.co_consul_count, 0, GameManager.CAESAR_POLICIES_TO_WIN)
 	for i in range(_policies_square_styles.size()):
 		var st: StyleBoxFlat = _policies_square_styles[i]
 		if i < filled:

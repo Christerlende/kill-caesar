@@ -309,7 +309,7 @@ func _build_caesar_win_line(state) -> String:
 		if p.role == Role.CAESAR and not p.is_dead:
 			caesar = p
 			break
-	if caesar == null or caesar.co_consul_count < 3:
+	if caesar == null or caesar.co_consul_count < GameManager.CAESAR_POLICIES_TO_WIN:
 		return ""
 
 	## Override case: a policy is being enacted this round and the +1 influence would have

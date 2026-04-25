@@ -47,11 +47,22 @@ const DEADLOCK_SECRET_LOBBY_PAYOUT: int = 1
 const DEADLOCK_COSTLY_LOBBYING: int = 2
 const DEADLOCK_ASSASSINS_HUNT: int = 3
 
+# Influence awards
+const AWARD_NONE: int = -1
+const AWARD_PLEBEIAN_2_ROLE_PEEK: int = 0
+const AWARD_PLEBEIAN_4_TWO_ROLE_PEEK: int = 1
+const AWARD_PLEBEIAN_6_AUTO_ELECTION: int = 2
+const AWARD_PATRICIAN_2_DOUBLE_DISCARD: int = 3
+const AWARD_PATRICIAN_4_ROLE_PEEK: int = 4
+const AWARD_PATRICIAN_6_EXECUTION: int = 5
+const AWARD_THRESHOLDS: Array = [2, 4, 6]
+
 @onready var state: GameState = GameState.new()
 var pending_policy_choices: Array = []
 var _discarded_policy_objects: Array = []
 var policy_discard_stage: String = ""
 var _game_over_handled: bool = false
+var _patrician_double_discard_active: bool = false
 
 func role_name(role: int) -> String:
 	match role:
@@ -236,9 +247,17 @@ func _ready():
 
 func create_players():
 	_game_over_handled = false
+	_patrician_double_discard_active = false
 	last_winner_text = ""
 	last_caesar_override_faction = ""
 	last_player_snapshots.clear()
+	state.patrician_award_thresholds_triggered.clear()
+	state.plebeian_award_thresholds_triggered.clear()
+	state.pending_post_result_awards.clear()
+	state.pending_patrician_double_discard = false
+	state.pending_plebeian_auto_election = false
+	state.current_award_id = AWARD_NONE
+	state.auto_election_award_active = false
 	state.players.clear()
 	for i in range(6):
 		var p = Player.new()
@@ -320,6 +339,7 @@ func start_round():
 	state.election_votes_yes.clear()
 	state.election_votes_no.clear()
 	state.election_passed = false
+	state.auto_election_award_active = false
 	# Intentionally keep ineligible_co_consul_indices across rounds.
 	# It is only refreshed after a successful election.
 	state.election_vote_inputs.clear()
@@ -437,6 +457,17 @@ func select_election_nominee(nominee_index: int) -> bool:
 	for i in range(state.election_vote_inputs.size()):
 		state.election_vote_inputs[i] = 0 if state.players[i].is_dead else -1
 	print("Consul selected nominee player %d" % (nominee_index + 1))
+	if state.pending_plebeian_auto_election:
+		state.pending_plebeian_auto_election = false
+		state.auto_election_award_active = true
+		state.election_votes_yes.clear()
+		state.election_votes_no.clear()
+		for i in range(state.election_vote_inputs.size()):
+			state.election_vote_inputs[i] = 0 if state.players[i].is_dead else 1
+			if not state.players[i].is_dead:
+				state.election_votes_yes.append(i)
+		_complete_successful_election(nominee_index)
+		print("Plebeian influence award: nominee auto-elected as co-consul.")
 	return true
 
 func set_election_vote(player_id: int, is_yes: bool) -> bool:
@@ -466,6 +497,8 @@ func conduct_election() -> bool:
 	if state.election_nominee_index < 0:
 		print("No nominee selected yet")
 		return false
+	if state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0:
+		return state.election_passed
 	var nominee = state.election_nominee_index
 	print("Consul nominates player %d" % nominee)
 	state.election_votes_yes.clear()
@@ -486,25 +519,30 @@ func conduct_election() -> bool:
 	if yes >= _required_yes_votes():
 		state.election_passed = true
 		print("Election passed, player %d is co-consul" % nominee)
-		state.current_co_consul_index = nominee
-		# Update blocked pair only on successful election.
-		# Failed elections keep the previous successful pair blocked.
-		state.ineligible_co_consul_indices = [state.current_consul_index, nominee]
-		# update runtime flags
-		for p in state.players:
-			p.is_co_consul = false
-		var co = state.players[nominee]
-		co.is_co_consul = true
-		co.co_consul_count += 1
+		_complete_successful_election(nominee)
 		return true
 	else:
 		state.election_passed = false
 		print("Election failed")
 		return false
 
+func _complete_successful_election(nominee: int) -> void:
+	state.election_passed = true
+	state.current_co_consul_index = nominee
+	# Update blocked pair only on successful election.
+	# Failed elections keep the previous successful pair blocked.
+	state.ineligible_co_consul_indices = [state.current_consul_index, nominee]
+	# update runtime flags
+	for p in state.players:
+		p.is_co_consul = false
+	var co = state.players[nominee]
+	co.is_co_consul = true
+	co.co_consul_count += 1
+
 func start_policy_phase() -> void:
 	pending_policy_choices.clear()
 	_discarded_policy_objects.clear()
+	_patrician_double_discard_active = false
 	state.policy_drawn_ids.clear()
 	state.policy_discarded_ids.clear()
 	state.policy_enacted = null
@@ -519,6 +557,9 @@ func start_policy_phase() -> void:
 		state.game_phase = "spending"
 		start_spending_phase()
 		return
+	if state.pending_patrician_double_discard:
+		state.pending_patrician_double_discard = false
+		_patrician_double_discard_active = true
 	policy_discard_stage = "consul"
 	print("Policy phase started. Drawn policy IDs:", state.policy_drawn_ids)
 
@@ -530,6 +571,9 @@ func get_policy_discard_candidates() -> Array:
 
 func get_policy_discard_stage() -> String:
 	return policy_discard_stage
+
+func is_patrician_double_discard_active() -> bool:
+	return _patrician_double_discard_active
 
 func discard_policy_by_id(policy_id: int) -> bool:
 	if state.game_phase != "policy":
@@ -551,6 +595,9 @@ func discard_policy_by_id(policy_id: int) -> bool:
 		enact_remaining_policy()
 		return true
 	if policy_discard_stage == "consul":
+		if _patrician_double_discard_active:
+			print("Patrician influence award: consul discarded policy %d and must discard again." % policy_id)
+			return true
 		policy_discard_stage = "co_consul"
 		print("Consul discarded policy %d. Co-consul must discard next." % policy_id)
 	return true
@@ -564,6 +611,7 @@ func enact_remaining_policy() -> void:
 	# Enacted policies are removed from the game permanently.
 	pending_policy_choices.clear()
 	policy_discard_stage = "done"
+	_patrician_double_discard_active = false
 	# Return discarded policies to the deck and shuffle
 	for p in _discarded_policy_objects:
 		state.all_policies.append(p)
@@ -763,9 +811,13 @@ func apply_greed_punishment(punishment_id: int) -> void:
 			print("Greed: Heavy taxes for 3 rounds (threshold 20).")
 		GREED_PENDULUM:
 			if state.influence_patrician < state.influence_plebian:
+				var before_patrician = state.influence_patrician
 				state.influence_patrician += 2
+				_queue_awards_for_influence_gain(Role.PATRICIAN, before_patrician, state.influence_patrician)
 			elif state.influence_plebian < state.influence_patrician:
+				var before_plebeian = state.influence_plebian
 				state.influence_plebian += 2
+				_queue_awards_for_influence_gain(Role.PLEBIAN, before_plebeian, state.influence_plebian)
 			print("Greed: The pendulum swings.")
 		GREED_CAESAR_STEPS:
 			for pl in state.players:
@@ -1023,10 +1075,46 @@ func apply_policy_influence(policy: Policy) -> void:
 	if policy == null:
 		return
 	if policy.faction == Role.PATRICIAN:
+		var before_patrician = state.influence_patrician
 		state.influence_patrician += 1
+		_queue_awards_for_influence_gain(Role.PATRICIAN, before_patrician, state.influence_patrician)
 	else:
+		var before_plebeian = state.influence_plebian
 		state.influence_plebian += 1
+		_queue_awards_for_influence_gain(Role.PLEBIAN, before_plebeian, state.influence_plebian)
 	print("Applied influence for policy %d (faction %d)" % [policy.id, policy.faction])
+
+func _queue_awards_for_influence_gain(faction: int, previous_value: int, current_value: int) -> void:
+	var triggered = state.patrician_award_thresholds_triggered if faction == Role.PATRICIAN else state.plebeian_award_thresholds_triggered
+	var highest_new_threshold = -1
+	for threshold in AWARD_THRESHOLDS:
+		if threshold > previous_value and threshold <= current_value and not triggered.has(threshold):
+			highest_new_threshold = max(highest_new_threshold, threshold)
+	if highest_new_threshold < 0:
+		return
+	for threshold in AWARD_THRESHOLDS:
+		if threshold <= current_value and not triggered.has(threshold):
+			triggered.append(threshold)
+	_queue_influence_award(faction, highest_new_threshold)
+
+func _queue_influence_award(faction: int, threshold: int) -> void:
+	if faction == Role.PLEBIAN:
+		match threshold:
+			2:
+				state.pending_post_result_awards.append(AWARD_PLEBEIAN_2_ROLE_PEEK)
+			4:
+				state.pending_post_result_awards.append(AWARD_PLEBEIAN_4_TWO_ROLE_PEEK)
+			6:
+				state.pending_plebeian_auto_election = true
+	else:
+		match threshold:
+			2:
+				state.pending_patrician_double_discard = true
+			4:
+				state.pending_post_result_awards.append(AWARD_PATRICIAN_4_ROLE_PEEK)
+			6:
+				state.pending_post_result_awards.append(AWARD_PATRICIAN_6_EXECUTION)
+	print("Queued influence award for faction %d at %d influence." % [faction, threshold])
 
 func _record_round_history() -> void:
 	var consul_name = get_player_name(state.current_consul_index)
@@ -1064,7 +1152,9 @@ func progress():
 			if not are_election_votes_complete():
 				print("Set all election votes first")
 				return
-			if conduct_election():
+			var election_passed = state.election_passed if (state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0) else conduct_election()
+			if election_passed:
+				state.auto_election_award_active = false
 				state.game_phase = "policy"
 				start_policy_phase()
 			else:
@@ -1095,7 +1185,13 @@ func progress():
 			if state.game_phase != "game_over":
 				state.greed_round = false
 				state.deadlock_round = false
-				state.game_phase = "round_end"
+				if state.pending_post_result_awards.size() > 0:
+					state.current_award_id = state.pending_post_result_awards.pop_front()
+					state.game_phase = "award"
+				else:
+					state.game_phase = "round_end"
+		"award":
+			return
 		"round_end":
 			process_assassination_tokens_end_of_round()
 			next_consul()
@@ -1104,6 +1200,55 @@ func progress():
 			print("Game is over!")
 		_:
 			print("Unknown phase: %s" % state.game_phase)
+
+func get_current_award_id() -> int:
+	return state.current_award_id
+
+func award_peek_role(player_id: int) -> int:
+	if state.game_phase != "award":
+		return -1
+	if player_id < 0 or player_id >= state.players.size():
+		return -1
+	if state.players[player_id].is_dead:
+		return -1
+	return state.players[player_id].role
+
+func award_peek_two_roles(first_player_id: int, second_player_id: int) -> Array:
+	if first_player_id == second_player_id:
+		return []
+	var first_role = award_peek_role(first_player_id)
+	var second_role = award_peek_role(second_player_id)
+	if first_role < 0 or second_role < 0:
+		return []
+	var roles = [first_role, second_role]
+	roles.shuffle()
+	return roles
+
+func award_execute_player(player_id: int) -> bool:
+	if state.game_phase != "award":
+		return false
+	if state.current_award_id != AWARD_PATRICIAN_6_EXECUTION:
+		return false
+	if player_id < 0 or player_id >= state.players.size():
+		return false
+	if player_id == state.current_consul_index:
+		return false
+	var target = state.players[player_id]
+	if target.is_dead:
+		return false
+	target.is_dead = true
+	print("Influence award: Consul executed Player %d." % (player_id + 1))
+	check_win_condition()
+	return true
+
+func finish_current_award() -> void:
+	if state.game_phase != "award":
+		return
+	if state.pending_post_result_awards.size() > 0:
+		state.current_award_id = state.pending_post_result_awards.pop_front()
+	else:
+		state.current_award_id = AWARD_NONE
+		state.game_phase = "round_end"
 
 # ─── Assassination Token System ───
 

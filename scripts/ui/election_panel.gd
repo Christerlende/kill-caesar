@@ -178,6 +178,8 @@ func _process(_delta):
 		return
 	if state.game_phase != "election" and not _showing_result:
 		return
+	if state.game_phase == "election" and state.auto_election_award_active and _is_election_resolved(state) and not _showing_result:
+		_show_auto_election_result(state)
 	if _showing_result:
 		_result_auto_advance_time_left = max(_result_auto_advance_time_left - _delta, 0.0)
 		_update_continue_button_text()
@@ -379,10 +381,26 @@ func _update_result(state) -> void:
 func _build_transition_text(state) -> String:
 	var consul_name = _player_name(state.current_consul_index)
 	var nominee_name = _player_name(state.election_nominee_index)
+	if state.auto_election_award_active:
+		return "Plebeian influence reached 6. %s names %s co-consul, and the senate yields without a vote." % [consul_name, nominee_name]
 	if state.election_passed:
 		var co_consul_name = _player_name(state.current_co_consul_index) if state.current_co_consul_index >= 0 else nominee_name
 		return "%s and %s step into power as consul and co-consul." % [consul_name, co_consul_name]
 	return "%s and %s do not gain power. The senate rejects their rise this round." % [consul_name, nominee_name]
+
+func _is_election_resolved(state) -> bool:
+	return state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0
+
+func _show_auto_election_result(state) -> void:
+	_showing_result = true
+	_result_auto_advance_time_left = RESULT_TRANSITION_SECONDS
+	_continue_button.visible = true
+	_middle_content.visible = false
+	_bottom_content.visible = true
+	_last_vote_signature = ""
+	_update_continue_button_text()
+	_update_result(state)
+	_play_result_reveal_animation()
 
 func reset_panel() -> void:
 	_last_nominee_index = -99
@@ -423,8 +441,11 @@ func _advance_after_result() -> void:
 	_showing_result = false
 	_result_auto_advance_time_left = 0.0
 	_continue_button.visible = false
-	if game_manager and game_manager.state and game_manager.state.game_phase == "round_end":
-		game_manager.progress()
+	if game_manager and game_manager.state:
+		if game_manager.state.game_phase == "election" and _is_election_resolved(game_manager.state):
+			game_manager.progress()
+		elif game_manager.state.game_phase == "round_end":
+			game_manager.progress()
 
 func _resolve_election_and_show_result() -> void:
 	_auto_resolve_queued = false

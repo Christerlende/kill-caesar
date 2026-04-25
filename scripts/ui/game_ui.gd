@@ -34,6 +34,7 @@ var spending_panel = null
 var result_panel = null
 var round_start_panel = null
 var greed_panel = null
+var award_panel = null
 var info_panel = null
 var assassination_tokens_panel = null
 var _was_election_panel_active: bool = false
@@ -42,6 +43,7 @@ var _was_spending_panel_active: bool = false
 var _was_result_panel_active: bool = false
 var _was_round_start_panel_active: bool = false
 var _was_greed_panel_active: bool = false
+var _was_award_panel_active: bool = false
 var _collapse_endgame_started: bool = false
 var _prev_game_phase_for_election_reset: String = ""
 
@@ -168,6 +170,12 @@ func _ready():
 		greed_panel.game_manager = game_manager
 		_apply_action_panel_frame(greed_panel)
 		greed_panel.visible = false
+
+	award_panel = get_node_or_null("AwardPanel")
+	if award_panel:
+		award_panel.game_manager = game_manager
+		_apply_action_panel_frame(award_panel)
+		award_panel.visible = false
 
 	# connect info panel (left sidebar)
 	info_panel = get_node_or_null("InfoPanel")
@@ -387,6 +395,8 @@ func _process(_delta):
 		_apply_action_panel_frame(result_panel)
 	if greed_panel:
 		_apply_action_panel_frame(greed_panel)
+	if award_panel:
+		_apply_action_panel_frame(award_panel)
 	# Toggle election panel vs legacy debug controls
 	var in_election = state.game_phase == "election"
 	var election_transition_active = false
@@ -429,6 +439,13 @@ func _process(_delta):
 			greed_panel.reset_panel()
 	_was_greed_panel_active = in_greed
 
+	var in_award = state.game_phase == "award"
+	if award_panel:
+		award_panel.visible = in_award
+		if _was_award_panel_active and not in_award:
+			award_panel.reset_panel()
+	_was_award_panel_active = in_award
+
 	# Toggle spending panel vs legacy spending controls
 	var in_spending = state.game_phase == "spending"
 	if spending_panel:
@@ -465,7 +482,7 @@ func _process(_delta):
 	_was_round_start_panel_active = in_round_start
 
 	# Toggle assassination tokens panel in the sidebar during active play, round start, and result
-	var in_assassination_mode = state.game_phase in ["round_start", "election", "policy", "spending", "greed", "result"]
+	var in_assassination_mode = state.game_phase in ["round_start", "election", "policy", "spending", "greed", "result", "award"]
 	if assassination_tokens_panel:
 		var assassination_viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
 		if state.game_phase in ["spending", "result"] and state.spending_input_player_index >= 0:

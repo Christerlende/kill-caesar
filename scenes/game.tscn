@@ -90,12 +90,11 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PatricianInfluenceBar" type="ProgressBar" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianBarValueRow" unique_id=1836138471]
+[node name="PatricianInfluenceBar" type="HBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianBarValueRow" unique_id=1836138471]
 custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 size_flags_horizontal = 3
-max_value = 5.0
-show_percentage = false
+theme_override_constants/separation = 2
 
 [node name="PatricianInfluenceValue" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianBarValueRow"]
 custom_minimum_size = Vector2(48, 0)
@@ -116,12 +115,11 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="PlebeianInfluenceBar" type="ProgressBar" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianBarValueRow" unique_id=235175856]
+[node name="PlebeianInfluenceBar" type="HBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianBarValueRow" unique_id=235175856]
 custom_minimum_size = Vector2(0, 24)
 layout_mode = 2
 size_flags_horizontal = 3
-max_value = 5.0
-show_percentage = false
+theme_override_constants/separation = 2
 
 [node name="PlebeianInfluenceValue" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianBarValueRow"]
 custom_minimum_size = Vector2(48, 0)

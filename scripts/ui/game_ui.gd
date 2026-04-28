@@ -16,8 +16,8 @@ var player_purses_label: Label
 var gold_gain_label: Label
 var phase_info_label: Label
 var next_button: Button
-var patrician_influence_bar: ProgressBar
-var plebeian_influence_bar: ProgressBar
+var patrician_influence_bar: HBoxContainer
+var plebeian_influence_bar: HBoxContainer
 var patrician_influence_value_label: Label
 var plebeian_influence_value_label: Label
 var _nominee_ui_key: String = ""
@@ -58,6 +58,7 @@ const ACTION_PANEL_OFFSET_LEFT: float = 375.0
 const ACTION_PANEL_OFFSET_TOP: float = 250.0
 const ACTION_PANEL_OFFSET_RIGHT: float = -18.0
 const ACTION_PANEL_OFFSET_BOTTOM: float = -14.0
+const INFLUENCE_SEGMENT_HEIGHT: float = 24.0
 
 func _ready():
 	# determine game manager reference
@@ -217,36 +218,35 @@ func _apply_influence_bar_styles() -> void:
 	if not patrician_influence_bar or not plebeian_influence_bar:
 		return
 
-	var bg_style = StyleBoxFlat.new()
-	bg_style.bg_color = Color(0.12, 0.08, 0.06, 0.95)
-	bg_style.border_width_left = 1
-	bg_style.border_width_top = 1
-	bg_style.border_width_right = 1
-	bg_style.border_width_bottom = 1
-	bg_style.border_color = Color(0.7, 0.55, 0.2, 0.7)
-	bg_style.corner_radius_top_left = 6
-	bg_style.corner_radius_top_right = 6
-	bg_style.corner_radius_bottom_left = 6
-	bg_style.corner_radius_bottom_right = 6
+	var influence_target = max(1, game_manager.influence_to_win)
+	_ensure_influence_segments(patrician_influence_bar, influence_target)
+	_ensure_influence_segments(plebeian_influence_bar, influence_target)
 
-	var patrician_fill = StyleBoxFlat.new()
-	patrician_fill.bg_color = Color(0.76, 0.16, 0.12, 0.95)
-	patrician_fill.corner_radius_top_left = 5
-	patrician_fill.corner_radius_top_right = 5
-	patrician_fill.corner_radius_bottom_left = 5
-	patrician_fill.corner_radius_bottom_right = 5
+func _ensure_influence_segments(bar: HBoxContainer, segment_count: int) -> void:
+	while bar.get_child_count() < segment_count:
+		var segment = PanelContainer.new()
+		segment.custom_minimum_size = Vector2(0, INFLUENCE_SEGMENT_HEIGHT)
+		segment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		bar.add_child(segment)
+	while bar.get_child_count() > segment_count:
+		bar.get_child(bar.get_child_count() - 1).queue_free()
 
-	var plebeian_fill = StyleBoxFlat.new()
-	plebeian_fill.bg_color = Color(0.2, 0.36, 0.82, 0.95)
-	plebeian_fill.corner_radius_top_left = 5
-	plebeian_fill.corner_radius_top_right = 5
-	plebeian_fill.corner_radius_bottom_left = 5
-	plebeian_fill.corner_radius_bottom_right = 5
-
-	patrician_influence_bar.add_theme_stylebox_override("background", bg_style)
-	plebeian_influence_bar.add_theme_stylebox_override("background", bg_style)
-	patrician_influence_bar.add_theme_stylebox_override("fill", patrician_fill)
-	plebeian_influence_bar.add_theme_stylebox_override("fill", plebeian_fill)
+func _update_influence_segments(bar: HBoxContainer, value: int, segment_count: int, fill_color: Color) -> void:
+	_ensure_influence_segments(bar, segment_count)
+	for i in range(bar.get_child_count()):
+		var segment = bar.get_child(i)
+		var st = StyleBoxFlat.new()
+		st.bg_color = fill_color if i < value else Color(0.12, 0.08, 0.06, 0.95)
+		st.border_width_left = 1
+		st.border_width_top = 1
+		st.border_width_right = 1
+		st.border_width_bottom = 1
+		st.border_color = Color(0.7, 0.55, 0.2, 0.78)
+		st.corner_radius_top_left = 3
+		st.corner_radius_top_right = 3
+		st.corner_radius_bottom_left = 3
+		st.corner_radius_bottom_right = 3
+		segment.add_theme_stylebox_override("panel", st)
 
 func _build_chaos_counter_hud() -> void:
 	var hud_vbox = get_node_or_null("TopHudPanel/HudMargin/HudVBox")
@@ -369,10 +369,18 @@ func _process(_delta):
 		influence_label.text = "Patrician Influence: %d | Plebeian Influence: %d" % [state.influence_patrician, state.influence_plebian]
 	if patrician_influence_bar and plebeian_influence_bar:
 		var influence_target = max(1, game_manager.influence_to_win)
-		patrician_influence_bar.max_value = influence_target
-		plebeian_influence_bar.max_value = influence_target
-		patrician_influence_bar.value = state.influence_patrician
-		plebeian_influence_bar.value = state.influence_plebian
+		_update_influence_segments(
+			patrician_influence_bar,
+			state.influence_patrician,
+			influence_target,
+			Color(0.76, 0.16, 0.12, 0.95)
+		)
+		_update_influence_segments(
+			plebeian_influence_bar,
+			state.influence_plebian,
+			influence_target,
+			Color(0.2, 0.36, 0.82, 0.95)
+		)
 		if patrician_influence_value_label:
 			patrician_influence_value_label.text = "%d/%d" % [state.influence_patrician, influence_target]
 		if plebeian_influence_value_label:

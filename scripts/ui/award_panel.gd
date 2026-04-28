@@ -5,7 +5,7 @@ const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
 const COLOR_DIM = Color(0.6, 0.55, 0.45, 0.75)
 const COLOR_RED = Color(0.72, 0.14, 0.1, 0.9)
 
-const REVEAL_SECONDS: float = 3.0
+const REVEAL_SECONDS: float = 5.0
 const AWARD_NONE: int = -1
 const AWARD_PLEBEIAN_2_ROLE_PEEK: int = 0
 const AWARD_PLEBEIAN_4_TWO_ROLE_PEEK: int = 1

@@ -86,11 +86,22 @@ layout_mode = 2
 text = "Patrician Influence"
 horizontal_alignment = 1
 
-[node name="PatricianInfluenceBar" type="ProgressBar" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox" unique_id=1836138471]
-custom_minimum_size = Vector2(0, 26)
+[node name="PatricianBarValueRow" type="HBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox"]
 layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PatricianInfluenceBar" type="ProgressBar" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianBarValueRow" unique_id=1836138471]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+size_flags_horizontal = 3
 max_value = 5.0
 show_percentage = false
+
+[node name="PatricianInfluenceValue" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianBarValueRow"]
+custom_minimum_size = Vector2(48, 0)
+layout_mode = 2
+text = "0/7"
+vertical_alignment = 1
 
 [node name="PlebeianBarBox" type="VBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow" unique_id=1465458989]
 layout_mode = 2
@@ -101,11 +112,22 @@ layout_mode = 2
 text = "Plebeian Influence"
 horizontal_alignment = 1
 
-[node name="PlebeianInfluenceBar" type="ProgressBar" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox" unique_id=235175856]
-custom_minimum_size = Vector2(0, 26)
+[node name="PlebeianBarValueRow" type="HBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox"]
 layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PlebeianInfluenceBar" type="ProgressBar" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianBarValueRow" unique_id=235175856]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+size_flags_horizontal = 3
 max_value = 5.0
 show_percentage = false
+
+[node name="PlebeianInfluenceValue" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianBarValueRow"]
+custom_minimum_size = Vector2(48, 0)
+layout_mode = 2
+text = "0/7"
+vertical_alignment = 1
 
 [node name="ActorPromptLabel" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox" unique_id=827301785]
 layout_mode = 2

@@ -18,6 +18,8 @@ var phase_info_label: Label
 var next_button: Button
 var patrician_influence_bar: ProgressBar
 var plebeian_influence_bar: ProgressBar
+var patrician_influence_value_label: Label
+var plebeian_influence_value_label: Label
 var _nominee_ui_key: String = ""
 var _vote_ui_key: String = ""
 var _policy_ui_key: String = ""
@@ -79,8 +81,10 @@ func _ready():
 	influence_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/InfluenceLabel")
 	consul_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/ConsulLabel")
 	actor_prompt_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/ActorPromptLabel")
-	patrician_influence_bar = get_node_or_null("TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianInfluenceBar")
-	plebeian_influence_bar = get_node_or_null("TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianInfluenceBar")
+	patrician_influence_bar = get_node_or_null("TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianBarValueRow/PatricianInfluenceBar")
+	plebeian_influence_bar = get_node_or_null("TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianBarValueRow/PlebeianInfluenceBar")
+	patrician_influence_value_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianBarValueRow/PatricianInfluenceValue")
+	plebeian_influence_value_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianBarValueRow/PlebeianInfluenceValue")
 
 	# fallback to legacy nodes if HUD nodes are unavailable
 	if not round_label:
@@ -369,6 +373,10 @@ func _process(_delta):
 		plebeian_influence_bar.max_value = influence_target
 		patrician_influence_bar.value = state.influence_patrician
 		plebeian_influence_bar.value = state.influence_plebian
+		if patrician_influence_value_label:
+			patrician_influence_value_label.text = "%d/%d" % [state.influence_patrician, influence_target]
+		if plebeian_influence_value_label:
+			plebeian_influence_value_label.text = "%d/%d" % [state.influence_plebian, influence_target]
 	if consul_label:
 		var consul = state.players[state.current_consul_index]
 		var co_consul_text = "Not chosen yet"

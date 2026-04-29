@@ -10,6 +10,7 @@
 [ext_resource type="Script" uid="uid://c7r3su1tp4n3l" path="res://scripts/ui/result_panel.gd" id="8"]
 [ext_resource type="Script" path="res://scripts/ui/round_start_panel.gd" id="9"]
 [ext_resource type="Script" path="res://scripts/ui/greed_panel.gd" id="10"]
+[ext_resource type="Script" path="res://scripts/ui/award_panel.gd" id="11"]
 
 [node name="Game" type="Node" unique_id=1989461786]
 script = ExtResource("1")
@@ -85,11 +86,21 @@ layout_mode = 2
 text = "Patrician Influence"
 horizontal_alignment = 1
 
-[node name="PatricianInfluenceBar" type="ProgressBar" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox" unique_id=1836138471]
-custom_minimum_size = Vector2(0, 26)
+[node name="PatricianBarValueRow" type="HBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox"]
 layout_mode = 2
-max_value = 5.0
-show_percentage = false
+theme_override_constants/separation = 8
+
+[node name="PatricianInfluenceBar" type="HBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianBarValueRow" unique_id=1836138471]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="PatricianInfluenceValue" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianBarValueRow"]
+custom_minimum_size = Vector2(48, 0)
+layout_mode = 2
+text = "0/7"
+vertical_alignment = 1
 
 [node name="PlebeianBarBox" type="VBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow" unique_id=1465458989]
 layout_mode = 2
@@ -100,11 +111,21 @@ layout_mode = 2
 text = "Plebeian Influence"
 horizontal_alignment = 1
 
-[node name="PlebeianInfluenceBar" type="ProgressBar" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox" unique_id=235175856]
-custom_minimum_size = Vector2(0, 26)
+[node name="PlebeianBarValueRow" type="HBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox"]
 layout_mode = 2
-max_value = 5.0
-show_percentage = false
+theme_override_constants/separation = 8
+
+[node name="PlebeianInfluenceBar" type="HBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianBarValueRow" unique_id=235175856]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="PlebeianInfluenceValue" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianBarValueRow"]
+custom_minimum_size = Vector2(48, 0)
+layout_mode = 2
+text = "0/7"
+vertical_alignment = 1
 
 [node name="ActorPromptLabel" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox" unique_id=827301785]
 layout_mode = 2
@@ -278,3 +299,15 @@ offset_right = -18.0
 offset_bottom = -14.0
 theme = ExtResource("4")
 script = ExtResource("10")
+
+[node name="AwardPanel" type="PanelContainer" parent="GameUI"]
+layout_mode = 1
+anchors_preset = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 375.0
+offset_top = 250.0
+offset_right = -18.0
+offset_bottom = -14.0
+theme = ExtResource("4")
+script = ExtResource("11")

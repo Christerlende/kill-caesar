@@ -12,6 +12,15 @@ var players: Array = []
 var all_policies: Array = []
 var game_phase: String = "init"
 
+# Influence awards
+var patrician_award_thresholds_triggered: Array = []
+var plebeian_award_thresholds_triggered: Array = []
+var pending_post_result_awards: Array = []
+var pending_patrician_double_discard: bool = false
+var pending_plebeian_auto_election: bool = false
+var current_award_id: int = -1
+var auto_election_award_active: bool = false
+
 # Phase result data for UI display
 # Election results
 var election_nominee_index: int = -1

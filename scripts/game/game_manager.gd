@@ -1098,6 +1098,16 @@ func _apply_effect(effect_type: String, params: Dictionary) -> void:
 		"set_random_role_assassination_counters":
 			var counter_role = Policy.role_from_string(str(params.get("role", "patrician")))
 			_set_random_role_assassination_counters(counter_role, int(params.get("target_count", 2)))
+		"gold_to_current_consul":
+			_gold_to_current_consul(int(params.get("amount", 0)))
+		"grant_assassination_token_to_current_consul":
+			_grant_assassination_token_to_current_consul()
+		"highest_influence_gain_or_all_lose_gold":
+			_highest_influence_gain_or_all_lose_gold(int(params.get("amount", 1)), int(params.get("gold_loss", 0)))
+		"lowest_influence_gain_or_all_gain_counters":
+			_lowest_influence_gain_or_all_gain_counters(int(params.get("amount", 2)))
+		"random_players_lose_all_gold":
+			_random_players_lose_all_gold(int(params.get("count", 1)))
 		"multi":
 			for sub_effect in params.get("effects", []):
 				_apply_effect(sub_effect.get("effect_type", ""), sub_effect.get("params", {}))
@@ -1143,6 +1153,22 @@ func _grant_policy_influence(faction: int, amount: int) -> void:
 		print("Granted %d extra Plebeian influence." % amount)
 	check_win_condition()
 
+func _highest_influence_gain_or_all_lose_gold(amount: int, gold_loss: int) -> void:
+	if state.influence_patrician > state.influence_plebian:
+		_grant_policy_influence(Role.PATRICIAN, amount)
+	elif state.influence_plebian > state.influence_patrician:
+		_grant_policy_influence(Role.PLEBIAN, amount)
+	else:
+		_all_players_lose_gold(gold_loss)
+
+func _lowest_influence_gain_or_all_gain_counters(amount: int) -> void:
+	if state.influence_patrician < state.influence_plebian:
+		_grant_policy_influence(Role.PATRICIAN, amount)
+	elif state.influence_plebian < state.influence_patrician:
+		_grant_policy_influence(Role.PLEBIAN, amount)
+	else:
+		_all_living_players_gain_lethal_assassination_counter()
+
 func _lose_gold_by_role(role: int, amount: int) -> void:
 	if amount <= 0:
 		return
@@ -1150,6 +1176,15 @@ func _lose_gold_by_role(role: int, amount: int) -> void:
 		if player.role == role and not player.is_dead:
 			player.money = max(player.money - amount, 0)
 	print("Members of faction %d lost %d gold." % [role, amount])
+
+func _all_players_lose_gold(amount: int) -> void:
+	if amount <= 0:
+		return
+	for player in state.players:
+		if player.is_dead:
+			continue
+		player.money = max(player.money - amount, 0)
+	print("All living players lost %d gold." % amount)
 
 func _random_players_lose_gold(count: int, amount: int) -> void:
 	if count <= 0 or amount <= 0:
@@ -1164,6 +1199,39 @@ func _random_players_lose_gold(count: int, amount: int) -> void:
 		var player_id = candidates[i]
 		state.players[player_id].money = max(state.players[player_id].money - amount, 0)
 		print("Player %d lost %d gold." % [player_id + 1, amount])
+
+func _gold_to_current_consul(amount: int) -> void:
+	if amount <= 0:
+		return
+	var consul_id = state.current_consul_index
+	if consul_id < 0 or consul_id >= state.players.size():
+		return
+	var consul = state.players[consul_id]
+	if consul.is_dead:
+		return
+	consul.money += amount
+	print("Consul Player %d gained %d gold." % [consul_id + 1, amount])
+
+func _grant_assassination_token_to_current_consul() -> void:
+	var consul_id = state.current_consul_index
+	if _grant_assassination_token_to_player_id(consul_id):
+		print("Consul Player %d gained an assassination token." % (consul_id + 1))
+	else:
+		print("Consul cannot receive another assassination token.")
+
+func _random_players_lose_all_gold(count: int) -> void:
+	if count <= 0:
+		return
+	var candidates = []
+	for i in range(state.players.size()):
+		if not state.players[i].is_dead:
+			candidates.append(i)
+	candidates.shuffle()
+	var hits = min(count, candidates.size())
+	for i in range(hits):
+		var player_id = candidates[i]
+		state.players[player_id].money = 0
+		print("Player %d lost all gold." % (player_id + 1))
 
 func _skip_income_by_role(role: int, rounds: int) -> void:
 	if rounds <= 0:
@@ -1202,6 +1270,18 @@ func _set_random_role_assassination_counters(role: int, target_count: int) -> vo
 		token.placed_this_round = false
 		state.active_assassination_tokens.append(token)
 	print("Set Player %d assassination counters to %d." % [target_id + 1, target_count])
+
+func _all_living_players_gain_lethal_assassination_counter() -> void:
+	for i in range(state.players.size()):
+		if state.players[i].is_dead:
+			continue
+		var token = AssassinationToken.new()
+		token.attacker_id = -1
+		token.target_id = i
+		token.rounds_left = 3
+		token.placed_this_round = true
+		state.active_assassination_tokens.append(token)
+	print("All living players gained one lethal assassination counter.")
 
 func _grant_random_assassination_token(target_role: int) -> void:
 	var candidates: Array = []

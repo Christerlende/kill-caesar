@@ -53,12 +53,17 @@ var _chaos_hud_row: HBoxContainer
 var _chaos_hint_label: Label
 var _chaos_square_panels: Array = []
 var _chaos_square_styles: Array = []
+var _influence_tooltip_panel: PanelContainer
+var _influence_tooltip_label: Label
+var _hovered_influence_marker: Control = null
 
 const ACTION_PANEL_OFFSET_LEFT: float = 375.0
 const ACTION_PANEL_OFFSET_TOP: float = 250.0
 const ACTION_PANEL_OFFSET_RIGHT: float = -18.0
 const ACTION_PANEL_OFFSET_BOTTOM: float = -14.0
 const INFLUENCE_SEGMENT_HEIGHT: float = 24.0
+const INFLUENCE_MILESTONES: Array = [2, 4, 6]
+const INFLUENCE_MARKER_HOVER_PAD: float = 8.0
 
 func _ready():
 	# determine game manager reference
@@ -213,40 +218,181 @@ func _ready():
 
 	_apply_influence_bar_styles()
 	_build_chaos_counter_hud()
+	_build_influence_tooltip_popup()
 
 func _apply_influence_bar_styles() -> void:
 	if not patrician_influence_bar or not plebeian_influence_bar:
 		return
 
 	var influence_target = max(1, game_manager.influence_to_win)
-	_ensure_influence_segments(patrician_influence_bar, influence_target)
-	_ensure_influence_segments(plebeian_influence_bar, influence_target)
+	_ensure_influence_segments(patrician_influence_bar, influence_target, true)
+	_ensure_influence_segments(plebeian_influence_bar, influence_target, false)
 
-func _ensure_influence_segments(bar: HBoxContainer, segment_count: int) -> void:
-	while bar.get_child_count() < segment_count:
+func _ensure_influence_segments(bar: HBoxContainer, segment_count: int, is_patrician: bool) -> void:
+	var expected_children = segment_count + _milestone_count_for_target(segment_count)
+	if bar.get_child_count() == expected_children and bar.get_child_count() > 0 and bar.get_child(0).has_meta("influence_segment_index"):
+		return
+	for child in bar.get_children():
+		bar.remove_child(child)
+		child.queue_free()
+	for i in range(segment_count):
 		var segment = PanelContainer.new()
 		segment.custom_minimum_size = Vector2(0, INFLUENCE_SEGMENT_HEIGHT)
 		segment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		segment.set_meta("influence_segment_index", i)
 		bar.add_child(segment)
-	while bar.get_child_count() > segment_count:
-		bar.get_child(bar.get_child_count() - 1).queue_free()
+		var threshold = i + 1
+		if INFLUENCE_MILESTONES.has(threshold) and threshold < segment_count:
+			var marker = PanelContainer.new()
+			marker.custom_minimum_size = Vector2(6, INFLUENCE_SEGMENT_HEIGHT)
+			marker.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			marker.mouse_filter = Control.MOUSE_FILTER_STOP
+			marker.tooltip_text = _influence_award_tooltip(is_patrician, threshold, false)
+			marker.set_meta("influence_milestone_threshold", threshold)
+			marker.set_meta("influence_milestone_is_patrician", is_patrician)
+			marker.mouse_entered.connect(_on_influence_milestone_hovered.bind(marker))
+			marker.mouse_exited.connect(_hide_influence_tooltip)
+			bar.add_child(marker)
 
-func _update_influence_segments(bar: HBoxContainer, value: int, segment_count: int, fill_color: Color) -> void:
-	_ensure_influence_segments(bar, segment_count)
-	for i in range(bar.get_child_count()):
-		var segment = bar.get_child(i)
-		var st = StyleBoxFlat.new()
-		st.bg_color = fill_color if i < value else Color(0.12, 0.08, 0.06, 0.95)
-		st.border_width_left = 1
-		st.border_width_top = 1
-		st.border_width_right = 1
-		st.border_width_bottom = 1
-		st.border_color = Color(0.7, 0.55, 0.2, 0.78)
-		st.corner_radius_top_left = 3
-		st.corner_radius_top_right = 3
-		st.corner_radius_bottom_left = 3
-		st.corner_radius_bottom_right = 3
-		segment.add_theme_stylebox_override("panel", st)
+func _milestone_count_for_target(segment_count: int) -> int:
+	var count = 0
+	for threshold in INFLUENCE_MILESTONES:
+		if threshold < segment_count:
+			count += 1
+	return count
+
+func _update_influence_segments(bar: HBoxContainer, value: int, segment_count: int, fill_color: Color, is_patrician: bool) -> void:
+	_ensure_influence_segments(bar, segment_count, is_patrician)
+	for child in bar.get_children():
+		if child.has_meta("influence_segment_index"):
+			var i = int(child.get_meta("influence_segment_index"))
+			var st = StyleBoxFlat.new()
+			st.bg_color = fill_color if i < value else Color(0.12, 0.08, 0.06, 0.95)
+			st.border_width_left = 1
+			st.border_width_top = 1
+			st.border_width_right = 1
+			st.border_width_bottom = 1
+			st.border_color = Color(0.7, 0.55, 0.2, 0.78)
+			st.corner_radius_top_left = 3
+			st.corner_radius_top_right = 3
+			st.corner_radius_bottom_left = 3
+			st.corner_radius_bottom_right = 3
+			child.add_theme_stylebox_override("panel", st)
+		elif child.has_meta("influence_milestone_threshold"):
+			var threshold = int(child.get_meta("influence_milestone_threshold"))
+			var earned = value >= threshold
+			child.tooltip_text = _influence_award_tooltip(is_patrician, threshold, earned)
+			child.add_theme_stylebox_override("panel", _influence_milestone_style(earned))
+
+func _influence_milestone_style(earned: bool) -> StyleBoxFlat:
+	var st = StyleBoxFlat.new()
+	st.bg_color = Color(1.0, 0.86, 0.24, 1.0) if earned else Color(0.48, 0.38, 0.15, 0.72)
+	st.border_width_left = 1
+	st.border_width_top = 1
+	st.border_width_right = 1
+	st.border_width_bottom = 1
+	st.border_color = Color(1.0, 0.95, 0.58, 0.95) if earned else Color(0.76, 0.62, 0.26, 0.75)
+	st.corner_radius_top_left = 2
+	st.corner_radius_top_right = 2
+	st.corner_radius_bottom_left = 2
+	st.corner_radius_bottom_right = 2
+	return st
+
+func _influence_award_tooltip(is_patrician: bool, threshold: int, earned: bool) -> String:
+	var prefix = "Award earned: " if earned else "At %d influence: " % threshold
+	if is_patrician:
+		match threshold:
+			2:
+				return prefix + "Next consul removes two policies; the co-consul removes none."
+			4:
+				return prefix + "Consul may inspect one player's secret role."
+			6:
+				return prefix + "Consul must kill a player."
+	else:
+		match threshold:
+			2:
+				return prefix + "Consul may inspect one player's secret role."
+			4:
+				return prefix + "Consul inspects two chosen roles, without knowing which player has which role."
+			6:
+				return prefix + "Next co-consul nomination is automatically approved."
+	return prefix + "Influence award."
+
+func _build_influence_tooltip_popup() -> void:
+	_influence_tooltip_panel = PanelContainer.new()
+	_influence_tooltip_panel.visible = false
+	_influence_tooltip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_influence_tooltip_panel.z_index = 100
+	var st = StyleBoxFlat.new()
+	st.bg_color = Color(0.08, 0.04, 0.03, 0.96)
+	st.border_width_left = 1
+	st.border_width_top = 1
+	st.border_width_right = 1
+	st.border_width_bottom = 1
+	st.border_color = Color(0.95, 0.82, 0.25, 0.9)
+	st.corner_radius_top_left = 5
+	st.corner_radius_top_right = 5
+	st.corner_radius_bottom_left = 5
+	st.corner_radius_bottom_right = 5
+	st.content_margin_left = 10.0
+	st.content_margin_right = 10.0
+	st.content_margin_top = 8.0
+	st.content_margin_bottom = 8.0
+	_influence_tooltip_panel.add_theme_stylebox_override("panel", st)
+
+	_influence_tooltip_label = Label.new()
+	_influence_tooltip_label.custom_minimum_size = Vector2(260, 0)
+	_influence_tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_influence_tooltip_label.add_theme_font_size_override("font_size", 13)
+	_influence_tooltip_label.add_theme_color_override("font_color", Color(0.95, 0.92, 0.85, 1))
+	_influence_tooltip_panel.add_child(_influence_tooltip_label)
+	add_child(_influence_tooltip_panel)
+
+func _on_influence_milestone_hovered(marker: Control) -> void:
+	if not _influence_tooltip_panel or not _influence_tooltip_label:
+		return
+	_hovered_influence_marker = marker
+	_show_influence_tooltip_for_marker(marker)
+
+func _show_influence_tooltip_for_marker(marker: Control) -> void:
+	if not _influence_tooltip_panel or not _influence_tooltip_label or not game_manager or not game_manager.state:
+		return
+	var threshold = int(marker.get_meta("influence_milestone_threshold", 0))
+	var is_patrician = bool(marker.get_meta("influence_milestone_is_patrician", false))
+	var current_value = game_manager.state.influence_patrician if is_patrician else game_manager.state.influence_plebian
+	_influence_tooltip_label.text = _influence_award_tooltip(is_patrician, threshold, current_value >= threshold)
+	_influence_tooltip_panel.visible = true
+	_influence_tooltip_panel.reset_size()
+	var marker_rect = marker.get_global_rect()
+	_influence_tooltip_panel.global_position = marker_rect.position + Vector2(-120, marker_rect.size.y + 8)
+
+func _hide_influence_tooltip() -> void:
+	_hovered_influence_marker = null
+	if _influence_tooltip_panel:
+		_influence_tooltip_panel.visible = false
+
+func _update_influence_tooltip_hover() -> void:
+	var marker = _find_hovered_influence_marker()
+	if marker:
+		_hovered_influence_marker = marker
+		_show_influence_tooltip_for_marker(marker)
+	else:
+		_hide_influence_tooltip()
+
+func _find_hovered_influence_marker() -> Control:
+	var mouse_pos = get_global_mouse_position()
+	for bar in [patrician_influence_bar, plebeian_influence_bar]:
+		if not bar:
+			continue
+		for child in bar.get_children():
+			if not child.has_meta("influence_milestone_threshold"):
+				continue
+			var rect = child.get_global_rect()
+			rect.position -= Vector2(INFLUENCE_MARKER_HOVER_PAD, INFLUENCE_MARKER_HOVER_PAD)
+			rect.size += Vector2(INFLUENCE_MARKER_HOVER_PAD * 2.0, INFLUENCE_MARKER_HOVER_PAD * 2.0)
+			if rect.has_point(mouse_pos):
+				return child
+	return null
 
 func _build_chaos_counter_hud() -> void:
 	var hud_vbox = get_node_or_null("TopHudPanel/HudMargin/HudVBox")
@@ -373,18 +519,21 @@ func _process(_delta):
 			patrician_influence_bar,
 			state.influence_patrician,
 			influence_target,
-			Color(0.76, 0.16, 0.12, 0.95)
+			Color(0.76, 0.16, 0.12, 0.95),
+			true
 		)
 		_update_influence_segments(
 			plebeian_influence_bar,
 			state.influence_plebian,
 			influence_target,
-			Color(0.2, 0.36, 0.82, 0.95)
+			Color(0.2, 0.36, 0.82, 0.95),
+			false
 		)
 		if patrician_influence_value_label:
 			patrician_influence_value_label.text = "%d/%d" % [state.influence_patrician, influence_target]
 		if plebeian_influence_value_label:
 			plebeian_influence_value_label.text = "%d/%d" % [state.influence_plebian, influence_target]
+		_update_influence_tooltip_hover()
 	if consul_label:
 		var consul = state.players[state.current_consul_index]
 		var co_consul_text = "Not chosen yet"

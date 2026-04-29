@@ -395,6 +395,8 @@ func _show_auto_election_result(state) -> void:
 	_showing_result = true
 	_result_auto_advance_time_left = RESULT_TRANSITION_SECONDS
 	_continue_button.visible = true
+	_clear_nominee_buttons()
+	_last_nominee_index = state.election_nominee_index
 	_middle_content.visible = false
 	_bottom_content.visible = true
 	_last_vote_signature = ""
@@ -423,6 +425,10 @@ func reset_panel() -> void:
 # --- callbacks ---
 
 func _on_nominee_selected(nominee_index: int) -> void:
+	if _showing_result:
+		return
+	if game_manager and game_manager.state and _is_election_resolved(game_manager.state):
+		return
 	game_manager.select_election_nominee(nominee_index)
 
 func _on_vote_toggled(is_on: bool, player_id: int, is_yes: bool) -> void:

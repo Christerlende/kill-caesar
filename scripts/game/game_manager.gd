@@ -445,6 +445,8 @@ func get_nominee_candidates() -> Array:
 func select_election_nominee(nominee_index: int) -> bool:
 	if state.game_phase != "election":
 		return false
+	if state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0:
+		return false
 	if nominee_index < 0 or nominee_index >= state.players.size():
 		return false
 	if state.players[nominee_index].is_dead:

@@ -288,9 +288,14 @@ func _on_item_visible(item_index: String) -> void:
 		if game_manager and game_manager.state and game_manager.state.policy_enacted:
 			game_manager.apply_policy_influence(game_manager.state.policy_enacted)
 			game_manager.check_win_condition()
+			if game_manager.state.game_phase == "game_over":
+				if _fade_tween:
+					_fade_tween.kill()
+					_fade_tween = null
+				_show_continue_button()
 	elif item_index == "decree" and not _decree_applied:
 		_decree_applied = true
-		if game_manager and game_manager.state and game_manager.state.policy_enacted:
+		if game_manager and game_manager.state and game_manager.state.game_phase != "game_over" and game_manager.state.policy_enacted:
 			game_manager.apply_enacted_decree_effect(game_manager.state.policy_enacted, game_manager.state.spending_winner)
 	elif item_index == "caesar":
 		## Ensures game_phase flips to "game_over" during the fade on deadlock/greed rounds

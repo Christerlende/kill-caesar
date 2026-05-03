@@ -473,7 +473,10 @@ func _rebuild_history(state) -> void:
 
 func _on_continue_pressed() -> void:
 	if game_manager:
-		game_manager.progress()
-		if game_manager.state.game_phase == "round_end":
+		if game_manager.is_online_game():
+			game_manager.rpc_progress.rpc_id(1)
+		else:
 			game_manager.progress()
+			if game_manager.state.game_phase == "round_end":
+				game_manager.progress()
 		_last_ui_key = ""

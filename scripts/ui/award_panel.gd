@@ -248,20 +248,30 @@ func _on_execution_target_selected(player_id: int) -> void:
 	row.add_child(cancel)
 
 func _confirm_execution(player_id: int) -> void:
-	if not game_manager.award_execute_player(player_id):
-		_show_award_controls()
-		return
-	_execution_done = true
-	_clear_content()
-	_instruction_label.text = "%s has been killed." % game_manager.get_player_name(player_id)
-	_continue_button.visible = true
+	if game_manager.is_online_game():
+		game_manager.rpc_award_execute.rpc_id(1, player_id)
+		_execution_done = true
+		_clear_content()
+		_instruction_label.text = "%s has been killed." % game_manager.get_player_name(player_id)
+		_continue_button.visible = true
+	else:
+		if not game_manager.award_execute_player(player_id):
+			_show_award_controls()
+			return
+		_execution_done = true
+		_clear_content()
+		_instruction_label.text = "%s has been killed." % game_manager.get_player_name(player_id)
+		_continue_button.visible = true
 
 func _on_spending_lock_target_selected(player_id: int) -> void:
 	if _policy_choice_done:
 		return
-	if not game_manager.award_lock_player_spending(player_id):
-		_show_award_controls()
-		return
+	if game_manager.is_online_game():
+		game_manager.rpc_award_lock_spending.rpc_id(1, player_id)
+	else:
+		if not game_manager.award_lock_player_spending(player_id):
+			_show_award_controls()
+			return
 	_policy_choice_done = true
 	_clear_content()
 	_instruction_label.text = "%s cannot spend gold next round." % game_manager.get_player_name(player_id)
@@ -270,9 +280,12 @@ func _on_spending_lock_target_selected(player_id: int) -> void:
 func _on_next_consul_target_selected(player_id: int) -> void:
 	if _policy_choice_done:
 		return
-	if not game_manager.award_choose_next_consul(player_id):
-		_show_award_controls()
-		return
+	if game_manager.is_online_game():
+		game_manager.rpc_award_choose_consul.rpc_id(1, player_id)
+	else:
+		if not game_manager.award_choose_next_consul(player_id):
+			_show_award_controls()
+			return
 	_policy_choice_done = true
 	_clear_content()
 	_instruction_label.text = "%s will be Consul next round." % game_manager.get_player_name(player_id)
@@ -281,9 +294,12 @@ func _on_next_consul_target_selected(player_id: int) -> void:
 func _on_influence_choice_selected(faction: int) -> void:
 	if _policy_choice_done:
 		return
-	if not game_manager.award_choose_influence_no_awards(faction):
-		_show_award_controls()
-		return
+	if game_manager.is_online_game():
+		game_manager.rpc_award_choose_influence.rpc_id(1, faction)
+	else:
+		if not game_manager.award_choose_influence_no_awards(faction):
+			_show_award_controls()
+			return
 	_policy_choice_done = true
 	_clear_content()
 	_instruction_label.text = "%s influence increased by +1. No influence awards are triggered." % game_manager.role_name(faction)
@@ -340,9 +356,12 @@ func _award_title(award_id: int) -> String:
 
 func _on_continue_pressed() -> void:
 	if game_manager:
-		game_manager.finish_current_award()
-		if game_manager.state.game_phase == "round_end":
-			game_manager.progress()
+		if game_manager.is_online_game():
+			game_manager.rpc_finish_award.rpc_id(1)
+		else:
+			game_manager.finish_current_award()
+			if game_manager.state.game_phase == "round_end":
+				game_manager.progress()
 	reset_panel()
 
 func _clear_content() -> void:

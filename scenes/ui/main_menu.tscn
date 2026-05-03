@@ -63,7 +63,8 @@ theme_override_colors/font_color = Color(0.89, 0.83, 0.72, 1)
 
 [node name="BodyLabel" type="Label" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-text = "Compete for influence through elections, policy enactment, and hidden spending."
+text = "Compete for influence through elections, policy enactment,
+and hidden spending. Play online or pass-and-play."
 horizontal_alignment = 1
 autowrap_mode = 3
 theme_override_colors/font_color = Color(0.83, 0.77, 0.67, 1)
@@ -75,12 +76,12 @@ theme_override_constants/separation = 12
 [node name="PlayButton" type="Button" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/ButtonContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 56)
-text = "Play"
+text = "Play Online"
 
 [node name="TestMatchButton" type="Button" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/ButtonContainer"]
 layout_mode = 2
 custom_minimum_size = Vector2(0, 48)
-text = "Test Match"
+text = "Hotseat (Pass & Play)"
 
 [node name="RulesButton" type="Button" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/ButtonContainer"]
 layout_mode = 2

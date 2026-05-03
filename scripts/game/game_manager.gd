@@ -242,11 +242,20 @@ func auto_run_ai_spending_inputs() -> void:
 func _ready():
 	print("GameManager ready")
 	randomize()
+	var online = is_online_game()
+	if online and not _is_authority():
+		# Client: create empty state, wait for host snapshot
+		state.game_phase = "init"
+		return
 	create_players()
+	if online:
+		setup_online_seats()
 	state.all_policies = Policy.load_all_policies()
 	state.all_policies.shuffle()
 	state.game_phase = "init"
 	start_round()
+	if online:
+		broadcast_state()
 
 func create_players():
 	_game_over_handled = false
@@ -1622,3 +1631,394 @@ func grant_assassination_token_testing(player_id: int) -> bool:
 	)
 	print("Granted assassination token to Player %d (test)" % (player_id + 1))
 	return true
+
+# ─── Online multiplayer (ENet P2P) ─────────────────────────────
+#
+# Architecture:
+#   - The host (server, peer_id 1) owns the authoritative GameState.
+#   - Clients send action requests via RPC to the host.
+#   - After each mutation the host broadcasts a state snapshot so every
+#     client sees the same data.
+#   - The local `_process` UI loop reads `state` the same as before;
+#     in online mode it just happens to be a mirror of the host's copy.
+#
+# seat_for_peer maps multiplayer peer IDs to game-player indices (0-5).
+# For local/hotseat play this stays empty and nothing changes.
+
+var seat_for_peer: Dictionary = {}   # peer_id → player_index
+var peer_for_seat: Dictionary = {}   # player_index → peer_id
+
+func is_online_game() -> bool:
+	var nm = get_node_or_null("/root/NetworkManager")
+	return nm != null and nm.is_online
+
+func _is_authority() -> bool:
+	if not is_online_game():
+		return true
+	return multiplayer.is_server()
+
+func setup_online_seats() -> void:
+	var nm = get_node_or_null("/root/NetworkManager")
+	if nm == null:
+		return
+	seat_for_peer.clear()
+	peer_for_seat.clear()
+	var sorted = nm.get_sorted_peer_ids()
+	for i in range(sorted.size()):
+		var peer_id = sorted[i]
+		seat_for_peer[peer_id] = i
+		peer_for_seat[i] = peer_id
+	# Mark human players (those with a peer) as not AI
+	for i in range(state.players.size()):
+		state.players[i].is_ai = not peer_for_seat.has(i)
+
+func get_local_seat() -> int:
+	if not is_online_game():
+		return -1
+	var my_peer = multiplayer.get_unique_id()
+	return seat_for_peer.get(my_peer, -1)
+
+func is_local_player_turn_to_act() -> bool:
+	if not is_online_game():
+		return true
+	var seat = get_local_seat()
+	if seat < 0:
+		return false
+	match state.game_phase:
+		"election":
+			if state.election_nominee_index < 0:
+				return seat == state.current_consul_index
+			else:
+				return true
+		"policy":
+			var stage = get_policy_discard_stage()
+			if stage == "consul":
+				return seat == state.current_consul_index
+			elif stage == "co_consul":
+				return seat == state.current_co_consul_index
+			return false
+		"spending":
+			if state.spending_stage == "input":
+				return seat == state.spending_input_player_index
+			return false
+		"award":
+			return seat == state.current_consul_index
+		_:
+			return false
+
+# ── State serialization ──────────────────────────────────────
+
+func serialize_state() -> Dictionary:
+	var player_data: Array = []
+	for p in state.players:
+		player_data.append({
+			"player_id": p.player_id,
+			"display_name": p.display_name,
+			"role": p.role,
+			"money": p.money,
+			"is_ai": p.is_ai,
+			"is_consul": p.is_consul,
+			"is_co_consul": p.is_co_consul,
+			"co_consul_count": p.co_consul_count,
+			"gold_vote": p.gold_vote,
+			"is_dead": p.is_dead,
+			"available_assassination_tokens": p.available_assassination_tokens,
+			"caesar_plot_marks": p.caesar_plot_marks,
+		})
+	var token_data: Array = []
+	for t in state.active_assassination_tokens:
+		token_data.append({
+			"attacker_id": t.attacker_id,
+			"target_id": t.target_id,
+			"rounds_left": t.rounds_left,
+			"placed_this_round": t.placed_this_round,
+		})
+	var policy_enacted_data = null
+	if state.policy_enacted != null:
+		policy_enacted_data = _serialize_policy(state.policy_enacted)
+	var pending_data: Array = []
+	for pp in pending_policy_choices:
+		pending_data.append(_serialize_policy(pp))
+	return {
+		"round_number": state.round_number,
+		"influence_patrician": state.influence_patrician,
+		"influence_plebian": state.influence_plebian,
+		"current_consul_index": state.current_consul_index,
+		"current_co_consul_index": state.current_co_consul_index,
+		"game_phase": state.game_phase,
+		"players": player_data,
+		"election_nominee_index": state.election_nominee_index,
+		"election_votes_yes": state.election_votes_yes.duplicate(),
+		"election_votes_no": state.election_votes_no.duplicate(),
+		"election_passed": state.election_passed,
+		"election_vote_inputs": state.election_vote_inputs.duplicate(),
+		"ineligible_co_consul_indices": state.ineligible_co_consul_indices.duplicate(),
+		"auto_election_award_active": state.auto_election_award_active,
+		"policy_drawn_ids": state.policy_drawn_ids.duplicate(),
+		"policy_discarded_ids": state.policy_discarded_ids.duplicate(),
+		"policy_enacted": policy_enacted_data,
+		"spending_option_a_total": state.spending_option_a_total,
+		"spending_option_b_total": state.spending_option_b_total,
+		"spending_winner": state.spending_winner,
+		"spending_stage": state.spending_stage,
+		"spending_input_player_index": state.spending_input_player_index,
+		"spending_confirmed_players": state.spending_confirmed_players.duplicate(),
+		"round_history": state.round_history.duplicate(),
+		"active_assassination_tokens": token_data,
+		"greed_events_completed": state.greed_events_completed,
+		"greed_round": state.greed_round,
+		"greed_tax_threshold_override": state.greed_tax_threshold_override,
+		"greed_tax_rounds_remaining": state.greed_tax_rounds_remaining,
+		"last_greed_punishment_id": state.last_greed_punishment_id,
+		"deadlock_round": state.deadlock_round,
+		"last_deadlock_effect_id": state.last_deadlock_effect_id,
+		"current_award_id": state.current_award_id,
+		"pending_post_result_awards": state.pending_post_result_awards.duplicate(),
+		"policy_discard_stage": policy_discard_stage,
+		"pending_policy_count": pending_policy_choices.size(),
+		"pending_policies": pending_data,
+		"game_over_handled": _game_over_handled,
+		"patrician_double_discard_active": _patrician_double_discard_active,
+		"seat_for_peer": seat_for_peer.duplicate(),
+		"peer_for_seat": peer_for_seat.duplicate(),
+		# Static vars that clients need
+		"last_winner_text": last_winner_text,
+		"last_patrician_influence": last_patrician_influence,
+		"last_plebian_influence": last_plebian_influence,
+		"last_round_number": last_round_number,
+		"last_caesar_override_faction": last_caesar_override_faction,
+		"last_player_snapshots": last_player_snapshots.duplicate(),
+	}
+
+func _serialize_policy(p: Policy) -> Dictionary:
+	return {
+		"id": p.id,
+		"faction": p.faction,
+		"option_a_text": p.option_a_text,
+		"option_a_beneficiary": p.option_a_beneficiary,
+		"option_a_effect_type": p.option_a_effect_type,
+		"option_a_effect_params": p.option_a_effect_params,
+		"option_a_result_text": p.option_a_result_text,
+		"option_b_text": p.option_b_text,
+		"option_b_beneficiary": p.option_b_beneficiary,
+		"option_b_effect_type": p.option_b_effect_type,
+		"option_b_effect_params": p.option_b_effect_params,
+		"option_b_result_text": p.option_b_result_text,
+	}
+
+func _deserialize_policy(d: Dictionary) -> Policy:
+	var p = Policy.new()
+	p.id = int(d.get("id", 0))
+	p.faction = int(d.get("faction", Role.PLEBIAN))
+	p.option_a_text = str(d.get("option_a_text", ""))
+	p.option_a_beneficiary = int(d.get("option_a_beneficiary", Role.PLEBIAN))
+	p.option_a_effect_type = str(d.get("option_a_effect_type", ""))
+	p.option_a_effect_params = d.get("option_a_effect_params", {})
+	p.option_a_result_text = str(d.get("option_a_result_text", ""))
+	p.option_b_text = str(d.get("option_b_text", ""))
+	p.option_b_beneficiary = int(d.get("option_b_beneficiary", Role.PATRICIAN))
+	p.option_b_effect_type = str(d.get("option_b_effect_type", ""))
+	p.option_b_effect_params = d.get("option_b_effect_params", {})
+	p.option_b_result_text = str(d.get("option_b_result_text", ""))
+	return p
+
+func apply_state_snapshot(data: Dictionary) -> void:
+	state.round_number = int(data.get("round_number", 0))
+	state.influence_patrician = int(data.get("influence_patrician", 0))
+	state.influence_plebian = int(data.get("influence_plebian", 0))
+	state.current_consul_index = int(data.get("current_consul_index", 0))
+	state.current_co_consul_index = int(data.get("current_co_consul_index", -1))
+	state.game_phase = str(data.get("game_phase", "init"))
+	# Players
+	var player_data = data.get("players", [])
+	while state.players.size() < player_data.size():
+		state.players.append(Player.new())
+	while state.players.size() > player_data.size():
+		state.players.pop_back()
+	for i in range(player_data.size()):
+		var pd = player_data[i]
+		var p = state.players[i]
+		p.player_id = int(pd.get("player_id", i))
+		p.display_name = str(pd.get("display_name", "Player %d" % (i + 1)))
+		p.role = int(pd.get("role", Role.PLEBIAN))
+		p.money = int(pd.get("money", 0))
+		p.is_ai = bool(pd.get("is_ai", true))
+		p.is_consul = bool(pd.get("is_consul", false))
+		p.is_co_consul = bool(pd.get("is_co_consul", false))
+		p.co_consul_count = int(pd.get("co_consul_count", 0))
+		p.gold_vote = int(pd.get("gold_vote", 0))
+		p.is_dead = bool(pd.get("is_dead", false))
+		p.available_assassination_tokens = int(pd.get("available_assassination_tokens", 0))
+		p.caesar_plot_marks = int(pd.get("caesar_plot_marks", 0))
+	# Election
+	state.election_nominee_index = int(data.get("election_nominee_index", -1))
+	state.election_votes_yes = data.get("election_votes_yes", [])
+	state.election_votes_no = data.get("election_votes_no", [])
+	state.election_passed = bool(data.get("election_passed", false))
+	state.election_vote_inputs = data.get("election_vote_inputs", [])
+	state.ineligible_co_consul_indices = data.get("ineligible_co_consul_indices", [])
+	state.auto_election_award_active = bool(data.get("auto_election_award_active", false))
+	# Policy
+	state.policy_drawn_ids = data.get("policy_drawn_ids", [])
+	state.policy_discarded_ids = data.get("policy_discarded_ids", [])
+	var pe = data.get("policy_enacted", null)
+	state.policy_enacted = _deserialize_policy(pe) if pe != null else null
+	# Spending
+	state.spending_option_a_total = int(data.get("spending_option_a_total", 0))
+	state.spending_option_b_total = int(data.get("spending_option_b_total", 0))
+	state.spending_winner = str(data.get("spending_winner", ""))
+	state.spending_stage = str(data.get("spending_stage", "idle"))
+	state.spending_input_player_index = int(data.get("spending_input_player_index", -1))
+	state.spending_confirmed_players = data.get("spending_confirmed_players", [])
+	# History
+	state.round_history = data.get("round_history", [])
+	# Assassination tokens
+	state.active_assassination_tokens.clear()
+	for td in data.get("active_assassination_tokens", []):
+		var t = AssassinationToken.new()
+		t.attacker_id = int(td.get("attacker_id", 0))
+		t.target_id = int(td.get("target_id", 0))
+		t.rounds_left = int(td.get("rounds_left", 0))
+		t.placed_this_round = bool(td.get("placed_this_round", false))
+		state.active_assassination_tokens.append(t)
+	# Greed / deadlock
+	state.greed_events_completed = int(data.get("greed_events_completed", 0))
+	state.greed_round = bool(data.get("greed_round", false))
+	state.greed_tax_threshold_override = int(data.get("greed_tax_threshold_override", 0))
+	state.greed_tax_rounds_remaining = int(data.get("greed_tax_rounds_remaining", 0))
+	state.last_greed_punishment_id = int(data.get("last_greed_punishment_id", -1))
+	state.deadlock_round = bool(data.get("deadlock_round", false))
+	state.last_deadlock_effect_id = int(data.get("last_deadlock_effect_id", -1))
+	# Awards
+	state.current_award_id = int(data.get("current_award_id", AWARD_NONE))
+	state.pending_post_result_awards = data.get("pending_post_result_awards", [])
+	# Internal
+	policy_discard_stage = str(data.get("policy_discard_stage", ""))
+	_game_over_handled = bool(data.get("game_over_handled", false))
+	_patrician_double_discard_active = bool(data.get("patrician_double_discard_active", false))
+	# Pending policies
+	pending_policy_choices.clear()
+	for ppd in data.get("pending_policies", []):
+		pending_policy_choices.append(_deserialize_policy(ppd))
+	# Peer mapping
+	seat_for_peer = data.get("seat_for_peer", {})
+	peer_for_seat = data.get("peer_for_seat", {})
+	# Make sure dict keys are ints (Godot serializes them as strings sometimes)
+	var fixed_sfp: Dictionary = {}
+	for k in seat_for_peer.keys():
+		fixed_sfp[int(k)] = int(seat_for_peer[k])
+	seat_for_peer = fixed_sfp
+	var fixed_pfs: Dictionary = {}
+	for k in peer_for_seat.keys():
+		fixed_pfs[int(k)] = int(peer_for_seat[k])
+	peer_for_seat = fixed_pfs
+	# Static vars
+	last_winner_text = str(data.get("last_winner_text", ""))
+	last_patrician_influence = int(data.get("last_patrician_influence", 0))
+	last_plebian_influence = int(data.get("last_plebian_influence", 0))
+	last_round_number = int(data.get("last_round_number", 0))
+	last_caesar_override_faction = str(data.get("last_caesar_override_faction", ""))
+	last_player_snapshots = data.get("last_player_snapshots", [])
+
+func broadcast_state() -> void:
+	if not is_online_game() or not _is_authority():
+		return
+	var snapshot = serialize_state()
+	_receive_state_snapshot.rpc(snapshot)
+
+@rpc("authority", "reliable", "call_local")
+func _receive_state_snapshot(data: Dictionary) -> void:
+	if _is_authority():
+		return
+	apply_state_snapshot(data)
+
+# ── Client → Host RPCs (any_peer) ─────────────────────────────
+
+@rpc("any_peer", "reliable")
+func rpc_select_nominee(nominee_index: int) -> void:
+	if not _is_authority():
+		return
+	select_election_nominee(nominee_index)
+	broadcast_state()
+
+@rpc("any_peer", "reliable")
+func rpc_set_vote(player_id: int, is_yes: bool) -> void:
+	if not _is_authority():
+		return
+	set_election_vote(player_id, is_yes)
+	broadcast_state()
+
+@rpc("any_peer", "reliable")
+func rpc_discard_policy(policy_id: int) -> void:
+	if not _is_authority():
+		return
+	discard_policy_by_id(policy_id)
+	broadcast_state()
+
+@rpc("any_peer", "reliable")
+func rpc_set_spending(option_key: String, spend_amount: int) -> void:
+	if not _is_authority():
+		return
+	set_spending_allocation(option_key, spend_amount)
+	broadcast_state()
+
+@rpc("any_peer", "reliable")
+func rpc_progress() -> void:
+	if not _is_authority():
+		return
+	progress()
+	broadcast_state()
+
+@rpc("any_peer", "reliable")
+func rpc_place_assassination_token(attacker_id: int, target_id: int) -> void:
+	if not _is_authority():
+		return
+	place_assassination_token(attacker_id, target_id)
+	broadcast_state()
+
+@rpc("any_peer", "reliable")
+func rpc_award_peek_role(player_id: int) -> void:
+	if not _is_authority():
+		return
+	var role = award_peek_role(player_id)
+	var sender = multiplayer.get_remote_sender_id()
+	_receive_peek_result.rpc_id(sender, player_id, role)
+
+@rpc("authority", "reliable")
+func _receive_peek_result(_player_id: int, _role: int) -> void:
+	pass
+
+@rpc("any_peer", "reliable")
+func rpc_award_execute(player_id: int) -> void:
+	if not _is_authority():
+		return
+	award_execute_player(player_id)
+	broadcast_state()
+
+@rpc("any_peer", "reliable")
+func rpc_award_lock_spending(player_id: int) -> void:
+	if not _is_authority():
+		return
+	award_lock_player_spending(player_id)
+	broadcast_state()
+
+@rpc("any_peer", "reliable")
+func rpc_award_choose_consul(player_id: int) -> void:
+	if not _is_authority():
+		return
+	award_choose_next_consul(player_id)
+	broadcast_state()
+
+@rpc("any_peer", "reliable")
+func rpc_award_choose_influence(faction: int) -> void:
+	if not _is_authority():
+		return
+	award_choose_influence_no_awards(faction)
+	broadcast_state()
+
+@rpc("any_peer", "reliable")
+func rpc_finish_award() -> void:
+	if not _is_authority():
+		return
+	finish_current_award()
+	broadcast_state()

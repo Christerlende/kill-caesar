@@ -156,7 +156,10 @@ func _show_continue() -> void:
 
 func _on_continue_pressed() -> void:
 	if game_manager:
-		game_manager.finish_greed_sequence()
+		if game_manager.is_online_game():
+			game_manager.rpc_progress.rpc_id(1)
+		else:
+			game_manager.finish_greed_sequence()
 	reset_panel()
 
 func _punishment_sequence(pid: int) -> Array:

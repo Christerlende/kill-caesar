@@ -27,6 +27,10 @@ Run on all files:
 find . -name "*.gd" -exec godot --headless --check-only --script {} \;
 ```
 
+### Online multiplayer
+
+The game uses Godot's `ENetMultiplayerPeer` for P2P networking. The `NetworkManager` is registered as an autoload in `project.godot`. Architecture: host runs all game logic authoritatively; clients send actions via RPC, host validates and broadcasts state snapshots. Empty seats are filled by AI. Key files: `scripts/network/network_manager.gd`, `scripts/network/online_setup.gd`, `scripts/network/lobby.gd`.
+
 ### Known caveats in Cloud VMs
 
 - **Audio**: Godot logs PulseAudio/ALSA errors because Cloud VMs have no sound card. These are harmless — the engine falls back to a dummy audio driver.

@@ -1,0 +1,411 @@
+[
+  {
+    "id": 1,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Each Plebeian gains 2 gold",
+      "beneficiary": "plebeian",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "plebeian", "amount": 2 },
+      "result_text": "At dawn, grain carts entered the crowded districts and the ledgers were opened. By Senate decree, Plebeian households received fresh coin, and the alleys rang with rare relief.\nPlebeian representatives +2 gold."
+    },
+    "option_b": {
+      "text": "Each Patrician (except Caesar) gains 4 gold",
+      "beneficiary": "patrician",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "patrician", "amount": 4 },
+      "result_text": "Under torchlight, sealed purses were carried to Patrician villas. Gold favored old blood and noble names, while Caesar stood apart and watched the balance tilt.\nPatrician representatives +4 gold."
+    }
+  },
+  {
+    "id": 2,
+    "faction": "patrician",
+    "option_a": {
+      "text": "A random Plebeian representative receives 1 assassination token",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_assassination_token",
+      "effect_params": { "target_role": "plebeian" },
+      "result_text": "Beneath the Forum and beyond magistrates' eyes, a Plebeian envoy met in shadow. They emerged with a sealed token, and whispers spread that a cloaked blade now served their call.\n+1 Ass. token given to a random Plebeian."
+    },
+    "option_b": {
+      "text": "All players pay 3 gold toward civic repairs",
+      "beneficiary": "patrician",
+      "effect_type": "tax_all",
+      "effect_params": { "amount": 3 },
+      "result_text": "The Colosseum's outer stone has cracked, and engineers warned of ruin if repairs were delayed. Heralds went door to door, and every citizen was compelled to surrender 3 gold.\nAll players lose 3 gold."
+    }
+  },
+  {
+    "id": 3,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Caesar gains an assassination token",
+      "beneficiary": "caesar",
+      "effect_type": "grant_assassination_token",
+      "effect_params": { "target_role": "caesar" },
+      "result_text": "In the palace's inner chambers, Caesar received a hooded visitor who spoke no name. A sealed token was pressed into his hand — with it, the authority to silence one voice permanently. By morning, the guards had changed their routes.\nAss. token given to Caesar."
+    },
+    "option_b": {
+      "text": "A random Plebeian gains an assassination token and each Plebeian gains 2 gold",
+      "beneficiary": "plebeian",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "grant_assassination_token", "params": { "target_role": "plebeian" } },
+          { "effect_type": "gold_by_role", "params": { "role": "plebeian", "amount": 2 } }
+        ]
+      },
+      "result_text": "The Plebeian quarters stirred with new purpose. Coin flowed from sympathetic merchants, and in a wine-stained back room, a dagger was wrapped in cloth and passed to trembling hands. The common folk were done waiting.\n+1 Ass. token given to a random Plebeian. Plebeian representatives +2 gold."
+    }
+  },
+  {
+    "id": 4,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Each Plebeian gains 12 gold from emergency grain payments",
+      "beneficiary": "plebeian",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "plebeian", "amount": 12 },
+      "result_text": "The Senate opened the grain stores and paid the lower wards directly, hoping generosity would quiet the streets. For once, Plebeian purses grew heavy under a Patrician decree.\nPlebeian representatives +12 gold."
+    },
+    "option_b": {
+      "text": "Patrician influence rises by 1",
+      "beneficiary": "patrician",
+      "effect_type": "grant_influence",
+      "effect_params": { "faction": "patrician", "amount": 1 },
+      "result_text": "Old families closed ranks in the Senate, turning one decree into a public display of noble unity. Their authority hardened into something Rome could not ignore.\nPatrician influence +1."
+    }
+  },
+  {
+    "id": 5,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Each Plebeian gains 5 gold from public works wages",
+      "beneficiary": "plebeian",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "plebeian", "amount": 5 },
+      "result_text": "Public works spread across Rome, and the workers were paid before the foremen could skim the ledgers. The common quarters rang with the sound of fresh coin.\nPlebeian representatives +5 gold."
+    },
+    "option_b": {
+      "text": "The Consul bars one player from spending gold next round",
+      "beneficiary": "patrician",
+      "effect_type": "queue_spending_lock_choice",
+      "effect_params": {},
+      "result_text": "A legal restraint was prepared in the Consul's name. Before the next debate begins, one representative will be forbidden from spending gold on the outcome.\nThe Consul will choose one player who cannot spend gold next round."
+    }
+  },
+  {
+    "id": 6,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Patrician influence rises by 1",
+      "beneficiary": "patrician",
+      "effect_type": "grant_influence",
+      "effect_params": { "faction": "patrician", "amount": 1 },
+      "result_text": "The Senate spoke with one voice, and Rome heard the weight of ancient names behind every word.\nPatrician influence +1."
+    },
+    "option_b": {
+      "text": "Two random players each lose 5 gold",
+      "beneficiary": "patrician",
+      "effect_type": "random_players_lose_gold",
+      "effect_params": { "count": 2, "amount": 5 },
+      "result_text": "Auditors descended without warning, and two purses were emptied in the name of order. Whether the charges were just mattered less than who signed them.\nTwo random players each lose 5 gold."
+    }
+  },
+  {
+    "id": 7,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "The Consul chooses the next Consul",
+      "beneficiary": "plebeian",
+      "effect_type": "queue_next_consul_choice",
+      "effect_params": {},
+      "result_text": "The crowd demanded a voice in succession, and the office bent under public pressure. The Consul will name who carries authority into the next round.\nThe Consul will choose the next Consul."
+    },
+    "option_b": {
+      "text": "Plebeian influence rises by 1",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_influence",
+      "effect_params": { "faction": "plebeian", "amount": 1 },
+      "result_text": "The people's tribunes carried the Forum, and every cheer became another crack in noble control.\nPlebeian influence +1."
+    }
+  },
+  {
+    "id": 8,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "The next policy gold gain is doubled",
+      "beneficiary": "plebeian",
+      "effect_type": "double_next_policy_gold",
+      "effect_params": {},
+      "result_text": "The lower wards organized their ledgers and networks for the next windfall. When policy coin next reaches any hands, it will arrive twice as heavy.\nThe next gold gained through a policy is doubled."
+    },
+    "option_b": {
+      "text": "Two random players each lose 5 gold",
+      "beneficiary": "plebeian",
+      "effect_type": "random_players_lose_gold",
+      "effect_params": { "count": 2, "amount": 5 },
+      "result_text": "Debt collectors and street justice moved in the same night. Two representatives woke poorer, and nobody claimed responsibility.\nTwo random players each lose 5 gold."
+    }
+  },
+  {
+    "id": 9,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Caesar gains an assassination token",
+      "beneficiary": "caesar",
+      "effect_type": "grant_assassination_token",
+      "effect_params": { "target_role": "caesar" },
+      "result_text": "Caesar's agents answered unrest with sharper tools. A sealed token reached his hand, and the city learned that mercy was not his only instrument.\nAss. token given to Caesar."
+    },
+    "option_b": {
+      "text": "Caesar loses income for 2 rounds",
+      "beneficiary": "plebeian",
+      "effect_type": "skip_income_by_role",
+      "effect_params": { "role": "caesar", "rounds": 2 },
+      "result_text": "The people's allies choked off Caesar's revenues at their source. For two rounds, his coffers will hear no new tribute.\nCaesar loses income for 2 rounds."
+    }
+  },
+  {
+    "id": 10,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Caesar loses 10 gold and Plebeian influence rises by 1",
+      "beneficiary": "plebeian",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "lose_gold_by_role", "params": { "role": "caesar", "amount": 10 } },
+          { "effect_type": "grant_influence", "params": { "faction": "plebeian", "amount": 1 } }
+        ]
+      },
+      "result_text": "Caesar's treasury was struck in public, and the people celebrated every coin torn from his grasp.\nCaesar loses 10 gold. Plebeian influence +1."
+    },
+    "option_b": {
+      "text": "Caesar gains 5 gold and Patrician influence rises by 1",
+      "beneficiary": "patrician",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "gold_by_role", "params": { "role": "caesar", "amount": 5 } },
+          { "effect_type": "grant_influence", "params": { "faction": "patrician", "amount": 1 } }
+        ]
+      },
+      "result_text": "Caesar accepted noble support with one hand while the Patricians claimed credit with the other.\nCaesar +5 gold. Patrician influence +1."
+    }
+  },
+  {
+    "id": 11,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "The next policy grants 2 standard influence instead of 1",
+      "beneficiary": "plebeian",
+      "effect_type": "double_next_policy_influence",
+      "effect_params": {},
+      "result_text": "Tribunes carried the people's cause from street corner to Senate step, building a pressure that would outlast the day. The next enacted policy will strike the influence scales twice as hard.\nThe next standard policy influence gain is +2 instead of +1."
+    },
+    "option_b": {
+      "text": "The Consul chooses one influence bar to increase by 1",
+      "beneficiary": "plebeian",
+      "effect_type": "queue_influence_choice_no_awards",
+      "effect_params": {},
+      "result_text": "The decree left one final seal blank, and the Consul alone would decide whose cause it advanced. No honors would follow, only a quiet shift in Rome's balance.\nThe Consul will choose one influence bar to increase by +1. Influence awards are not triggered."
+    }
+  },
+  {
+    "id": 12,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Plebeian influence rises by 1",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_influence",
+      "effect_params": { "faction": "plebeian", "amount": 1 },
+      "result_text": "Hunger sharpened the people's voices, and even noble halls could not shut out the sound. The Plebeian cause rose with every empty bowl.\nPlebeian influence +1."
+    },
+    "option_b": {
+      "text": "Famine: Plebeians lose income for 2 rounds; a random Patrician is set to 2 assassination counters; Caesar loses income for 1 round and cannot spend next round",
+      "beneficiary": "patrician",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "skip_income_by_role", "params": { "role": "plebeian", "rounds": 2 } },
+          { "effect_type": "set_random_role_assassination_counters", "params": { "role": "patrician", "target_count": 2 } },
+          { "effect_type": "skip_income_by_role", "params": { "role": "caesar", "rounds": 1 } },
+          { "effect_type": "direct_spending_lock_by_role", "params": { "role": "caesar" } }
+        ]
+      },
+      "result_text": "The granaries closed, the markets thinned, and famine became a weapon. Plebeian income withers, Caesar's coffers stall, and one Patrician finds two blades already circling close.\nPlebeians lose passive income for 2 rounds. A random Patrician is set to 2 assassination counters. Caesar loses income for 1 round and cannot spend gold next round."
+    }
+  },
+  {
+    "id": 13,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Each Plebeian gains 4 gold",
+      "beneficiary": "plebeian",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "plebeian", "amount": 4 },
+      "result_text": "The Senate released coin into the lower wards, not from kindness but calculation. Whatever the motive, Plebeian hands closed around real gold.\nPlebeian representatives +4 gold."
+    },
+    "option_b": {
+      "text": "Caesar gains 12 gold",
+      "beneficiary": "caesar",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "caesar", "amount": 12 },
+      "result_text": "Provincial tribute arrived under armed guard and passed directly into Caesar's keeping. The treasury doors shut behind twelve measures of power.\nCaesar +12 gold."
+    }
+  },
+  {
+    "id": 14,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Patrician influence rises by 1",
+      "beneficiary": "patrician",
+      "effect_type": "grant_influence",
+      "effect_params": { "faction": "patrician", "amount": 1 },
+      "result_text": "A Plebeian motion was twisted by noble procedure until the old families emerged stronger. The crowd saw the trick too late.\nPatrician influence +1."
+    },
+    "option_b": {
+      "text": "Each Patrician gains 6 gold",
+      "beneficiary": "patrician",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "patrician", "amount": 6 },
+      "result_text": "Contracts, rents, and favors all found their way upward. Patrician coffers swelled while the decree's public promises faded into smoke.\nPatrician representatives +6 gold."
+    }
+  },
+  {
+    "id": 15,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Plebeian influence rises by 1",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_influence",
+      "effect_params": { "faction": "plebeian", "amount": 1 },
+      "result_text": "The Patricians yielded a narrow reform, certain they could contain it. Instead, the Plebeian cause took another step into the center of Rome.\nPlebeian influence +1."
+    },
+    "option_b": {
+      "text": "Each Plebeian gains 4 gold",
+      "beneficiary": "plebeian",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "plebeian", "amount": 4 },
+      "result_text": "A stipend crossed the city in small purses and open hands. For once, the common districts counted gains instead of losses.\nPlebeian representatives +4 gold."
+    }
+  },
+  {
+    "id": 16,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Plebeian influence rises by 1 and the Consul gains 15 gold",
+      "beneficiary": "plebeian",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "grant_influence", "params": { "faction": "plebeian", "amount": 1 } },
+          { "effect_type": "gold_to_current_consul", "params": { "amount": 15 } }
+        ]
+      },
+      "result_text": "A concession to the people passed beneath Patrician seals, but the Consul did not leave empty-handed. The crowd gained a louder voice while one office grew rich.\nPlebeian influence +1. The Consul gains 15 gold."
+    },
+    "option_b": {
+      "text": "Patrician influence rises by 1 and the Consul gains an assassination token",
+      "beneficiary": "patrician",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "grant_influence", "params": { "faction": "patrician", "amount": 1 } },
+          { "effect_type": "grant_assassination_token_to_current_consul", "params": {} }
+        ]
+      },
+      "result_text": "The nobles strengthened their hand, and a sealed token passed quietly to the Consul. Influence and danger now sat in the same chair.\nPatrician influence +1. The Consul gains an assassination token."
+    }
+  },
+  {
+    "id": 17,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "The highest influence bar rises by 1, or all players lose 10 gold if tied",
+      "beneficiary": "plebeian",
+      "effect_type": "highest_influence_gain_or_all_lose_gold",
+      "effect_params": { "amount": 1, "gold_loss": 10 },
+      "result_text": "Rome followed strength. If one faction stood higher, its banners climbed higher still; if neither did, every purse paid for the stalemate.\nThe highest influence bar gains +1. If tied, all players lose 10 gold."
+    },
+    "option_b": {
+      "text": "The lowest influence bar rises by 2, or all players gain an assassination counter if tied",
+      "beneficiary": "plebeian",
+      "effect_type": "lowest_influence_gain_or_all_gain_counters",
+      "effect_params": { "amount": 2 },
+      "result_text": "The weaker cause found sudden momentum. But when Rome stood evenly divided, suspicion spread everywhere, and every living representative felt a blade move closer.\nThe lowest influence bar gains +2. If tied, every living player gains +1 assassination counter."
+    }
+  },
+  {
+    "id": 18,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "A random Plebeian and Patrician each gain an assassination token",
+      "beneficiary": "plebeian",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "grant_assassination_token", "params": { "target_role": "plebeian" } },
+          { "effect_type": "grant_assassination_token", "params": { "target_role": "patrician" } }
+        ]
+      },
+      "result_text": "Daggers crossed class lines in the same night. One token vanished into the lower wards, another into a noble house, and Rome slept less soundly.\nA random Plebeian and a random Patrician each gain an assassination token."
+    },
+    "option_b": {
+      "text": "Two random players lose all their gold",
+      "beneficiary": "plebeian",
+      "effect_type": "random_players_lose_all_gold",
+      "effect_params": { "count": 2 },
+      "result_text": "Fortunes disappeared with no public trial and no honest ledger. By morning, two representatives found their coffers emptied to the last coin.\nTwo random players lose all their gold."
+    }
+  },
+  {
+    "id": 19,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Caesar gains an assassination token",
+      "beneficiary": "caesar",
+      "effect_type": "grant_assassination_token",
+      "effect_params": { "target_role": "caesar" },
+      "result_text": "Caesar's messengers moved before dawn, and one returned with a sealed token beneath his cloak. Power had found another sharp edge.\nCaesar gains an assassination token."
+    },
+    "option_b": {
+      "text": "Caesar gains 10 gold and each Patrician loses 5 gold",
+      "beneficiary": "caesar",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "gold_by_role", "params": { "role": "caesar", "amount": 10 } },
+          { "effect_type": "lose_gold_by_role", "params": { "role": "patrician", "amount": 5 } }
+        ]
+      },
+      "result_text": "Caesar took his share first, and the Patricians paid for the privilege of watching him do it. Noble purses lightened as imperial coffers grew.\nCaesar gains 10 gold. Each Patrician loses 5 gold."
+    }
+  },
+  {
+    "id": 20,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "The next policy gold gain is doubled",
+      "beneficiary": "plebeian",
+      "effect_type": "double_next_policy_gold",
+      "effect_params": {},
+      "result_text": "The people prepared their networks for the next flow of coin. When policy gold next changes hands, it will arrive twice as heavy.\nThe next gold gained through a policy is doubled."
+    },
+    "option_b": {
+      "text": "Famine: Plebeians lose income for 2 rounds; a random Patrician is set to 2 assassination counters; Caesar loses income for 1 round and cannot spend next round",
+      "beneficiary": "patrician",
+      "effect_type": "multi",
+      "effect_params": {
+        "effects": [
+          { "effect_type": "skip_income_by_role", "params": { "role": "plebeian", "rounds": 2 } },
+          { "effect_type": "set_random_role_assassination_counters", "params": { "role": "patrician", "target_count": 2 } },
+          { "effect_type": "skip_income_by_role", "params": { "role": "caesar", "rounds": 1 } },
+          { "effect_type": "direct_spending_lock_by_role", "params": { "role": "caesar" } }
+        ]
+      },
+      "result_text": "Famine returned like an old curse. Bread vanished, Caesar's revenue faltered, and one Patrician again found the knives already counted.\nPlebeians lose passive income for 2 rounds. A random Patrician is set to 2 assassination counters. Caesar loses income for 1 round and cannot spend gold next round."
+    }
+  }
+]

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="225" viewBox="0 0 400 225">
+  <rect width="400" height="225" fill="#2a1310"/>
+  <rect x="0" y="0" width="400" height="112" fill="#3a1d16"/>
+  <rect x="0" y="112" width="400" height="113" fill="#23100d"/>
+
+  <!-- Pixel-block wall texture -->
+  <rect x="12" y="14" width="28" height="10" fill="#4a271d"/>
+  <rect x="52" y="20" width="34" height="9" fill="#4f2a1f"/>
+  <rect x="94" y="12" width="22" height="11" fill="#47231b"/>
+  <rect x="130" y="18" width="30" height="10" fill="#522c20"/>
+  <rect x="170" y="14" width="22" height="8" fill="#48241b"/>
+  <rect x="208" y="19" width="24" height="9" fill="#542d21"/>
+  <rect x="244" y="13" width="30" height="10" fill="#4b261d"/>
+  <rect x="286" y="20" width="26" height="9" fill="#552f22"/>
+  <rect x="324" y="12" width="32" height="10" fill="#49251b"/>
+
+  <!-- Central clean readable zone -->
+  <rect x="108" y="26" width="184" height="138" fill="#301710"/>
+  <rect x="118" y="36" width="164" height="118" fill="#341a12"/>
+
+  <!-- Floor tiles -->
+  <rect x="0" y="154" width="400" height="8" fill="#3f2317"/>
+  <rect x="0" y="170" width="400" height="8" fill="#3a2116"/>
+  <rect x="0" y="186" width="400" height="8" fill="#362015"/>
+  <rect x="0" y="202" width="400" height="8" fill="#311c13"/>
+  <rect x="0" y="218" width="400" height="7" fill="#2d1a12"/>
+
+  <!-- Regal edge glow -->
+  <rect x="0" y="0" width="8" height="225" fill="#7c4a24"/>
+  <rect x="392" y="0" width="8" height="225" fill="#7c4a24"/>
+</svg>

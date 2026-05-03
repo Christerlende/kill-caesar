@@ -37,6 +37,33 @@ offset_right = 190.0
 offset_bottom = 479.0
 text = "Consul: none"
 
+[node name="ActorPromptLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Current actor: -"
+autowrap_mode = 3
+
+[node name="NomineeButtonsContainer" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="ElectionVotesContainer" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="PolicyDiscardButtonsContainer" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="SpendingControlsContainer" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="PlayerPursesLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Player 0 (Role): 0"
+autowrap_mode = 3
+
+[node name="PhaseInfoLabel" type="Label" parent="VBoxContainer"]
+layout_mode = 2
+text = "Phase: init"
+autowrap_mode = 3
+
 [node name="NextButton" type="Button" parent="VBoxContainer" unique_id=1842532756]
 layout_mode = 0
 offset_left = 514.0

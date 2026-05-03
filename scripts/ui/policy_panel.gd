@@ -320,11 +320,17 @@ func _on_card_clicked(policy_id: int) -> void:
 
 func _on_confirm_pressed() -> void:
 	if _selected_policy_id >= 0:
-		game_manager.discard_policy_by_id(_selected_policy_id)
+		if game_manager.is_online_game():
+			game_manager.rpc_discard_policy.rpc_id(1, _selected_policy_id)
+		else:
+			game_manager.discard_policy_by_id(_selected_policy_id)
 		_selected_policy_id = -1
-		_last_ui_key = ""  # force rebuild
+		_last_ui_key = ""
 		if game_manager and game_manager.state and game_manager.state.game_phase == "policy" and game_manager.state.policy_enacted != null:
-			game_manager.progress()
+			if game_manager.is_online_game():
+				game_manager.rpc_progress.rpc_id(1)
+			else:
+				game_manager.progress()
 
 func _on_cancel_pressed() -> void:
 	_selected_policy_id = -1

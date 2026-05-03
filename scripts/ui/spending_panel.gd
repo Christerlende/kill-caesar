@@ -382,7 +382,10 @@ func _on_option_plus_pressed(option_key: String, max_money: int) -> void:
 	_last_ui_key = ""
 
 func _on_pay_pressed() -> void:
-	game_manager.set_spending_allocation(_draft_option, _draft_amount)
+	if game_manager.is_online_game():
+		game_manager.rpc_set_spending.rpc_id(1, _draft_option, _draft_amount)
+	else:
+		game_manager.set_spending_allocation(_draft_option, _draft_amount)
 	_last_ui_key = ""
 
 func _on_pass_pressed() -> void:
@@ -390,7 +393,10 @@ func _on_pass_pressed() -> void:
 	_last_ui_key = ""
 
 func _on_resolved_proceed_pressed() -> void:
-	game_manager.progress()
+	if game_manager.is_online_game():
+		game_manager.rpc_progress.rpc_id(1)
+	else:
+		game_manager.progress()
 	_last_ui_key = ""
 
 func _show_dual_veto_immediate(card_a: PanelContainer, card_b: PanelContainer) -> void:

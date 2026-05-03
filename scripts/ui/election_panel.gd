@@ -429,11 +429,17 @@ func _on_nominee_selected(nominee_index: int) -> void:
 		return
 	if game_manager and game_manager.state and _is_election_resolved(game_manager.state):
 		return
-	game_manager.select_election_nominee(nominee_index)
+	if game_manager.is_online_game():
+		game_manager.rpc_select_nominee.rpc_id(1, nominee_index)
+	else:
+		game_manager.select_election_nominee(nominee_index)
 
 func _on_vote_toggled(is_on: bool, player_id: int, is_yes: bool) -> void:
 	if is_on:
-		game_manager.set_election_vote(player_id, is_yes)
+		if game_manager.is_online_game():
+			game_manager.rpc_set_vote.rpc_id(1, player_id, is_yes)
+		else:
+			game_manager.set_election_vote(player_id, is_yes)
 
 func _on_continue_pressed() -> void:
 	if _showing_result:
@@ -449,9 +455,15 @@ func _advance_after_result() -> void:
 	_continue_button.visible = false
 	if game_manager and game_manager.state:
 		if game_manager.state.game_phase == "election" and _is_election_resolved(game_manager.state):
-			game_manager.progress()
+			if game_manager.is_online_game():
+				game_manager.rpc_progress.rpc_id(1)
+			else:
+				game_manager.progress()
 		elif game_manager.state.game_phase == "round_end":
-			game_manager.progress()
+			if game_manager.is_online_game():
+				game_manager.rpc_progress.rpc_id(1)
+			else:
+				game_manager.progress()
 
 func _resolve_election_and_show_result() -> void:
 	_auto_resolve_queued = false
@@ -465,7 +477,10 @@ func _resolve_election_and_show_result() -> void:
 		return
 	if not game_manager.are_election_votes_complete():
 		return
-	game_manager.progress()
+	if game_manager.is_online_game():
+		game_manager.rpc_progress.rpc_id(1)
+	else:
+		game_manager.progress()
 	_showing_result = true
 	_result_auto_advance_time_left = RESULT_TRANSITION_SECONDS
 	_continue_button.visible = true

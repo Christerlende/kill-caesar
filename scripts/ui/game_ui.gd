@@ -1040,22 +1040,40 @@ func _decree_number_from_option_key(option_key: String) -> String:
 
 func _on_NextButton_pressed():
 	print("Next button pressed")
-	game_manager.progress()
+	if game_manager.is_online_game():
+		game_manager.rpc_progress.rpc_id(1)
+	else:
+		game_manager.progress()
 
 func _on_nominee_button_pressed(nominee_index: int) -> void:
-	game_manager.select_election_nominee(nominee_index)
+	if game_manager.is_online_game():
+		game_manager.rpc_select_nominee.rpc_id(1, nominee_index)
+	else:
+		game_manager.select_election_nominee(nominee_index)
 
 func _on_vote_yes_pressed(player_id: int) -> void:
-	game_manager.set_election_vote(player_id, true)
+	if game_manager.is_online_game():
+		game_manager.rpc_set_vote.rpc_id(1, player_id, true)
+	else:
+		game_manager.set_election_vote(player_id, true)
 
 func _on_vote_no_pressed(player_id: int) -> void:
-	game_manager.set_election_vote(player_id, false)
+	if game_manager.is_online_game():
+		game_manager.rpc_set_vote.rpc_id(1, player_id, false)
+	else:
+		game_manager.set_election_vote(player_id, false)
 
 func _on_policy_discard_pressed(policy_id: int) -> void:
-	game_manager.discard_policy_by_id(policy_id)
+	if game_manager.is_online_game():
+		game_manager.rpc_discard_policy.rpc_id(1, policy_id)
+	else:
+		game_manager.discard_policy_by_id(policy_id)
 
 func _on_spending_choice_pressed(option_key: String, spend_amount: int) -> void:
-	game_manager.set_spending_allocation(option_key, spend_amount)
+	if game_manager.is_online_game():
+		game_manager.rpc_set_spending.rpc_id(1, option_key, spend_amount)
+	else:
+		game_manager.set_spending_allocation(option_key, spend_amount)
 
 func _on_spending_ready_next_pressed() -> void:
 	game_manager.advance_spending_turn()
@@ -1073,12 +1091,18 @@ func _on_spending_plus_pressed(max_money: int) -> void:
 	_spending_ui_key = ""
 
 func _on_spending_pay_pressed() -> void:
-	game_manager.set_spending_allocation(_spend_selected_option, _spend_amount_draft)
+	if game_manager.is_online_game():
+		game_manager.rpc_set_spending.rpc_id(1, _spend_selected_option, _spend_amount_draft)
+	else:
+		game_manager.set_spending_allocation(_spend_selected_option, _spend_amount_draft)
 	_spending_ui_key = ""
 
 func _on_spending_continue_pressed() -> void:
 	if game_manager.state.greed_round:
 		return
-	game_manager.progress()
-	if game_manager.state.game_phase == "round_end":
+	if game_manager.is_online_game():
+		game_manager.rpc_progress.rpc_id(1)
+	else:
 		game_manager.progress()
+		if game_manager.state.game_phase == "round_end":
+			game_manager.progress()

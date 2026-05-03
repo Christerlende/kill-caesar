@@ -2,5 +2,10 @@
 .godot/
 /android/
 
+# Export builds (generated, too large for git — use GitHub Releases)
+builds/windows/
+builds/linux/
+builds/macos/
+
 # Debug / agent session NDJSON logs (do not commit)
 debug-*.log

@@ -55,15 +55,22 @@ func join_game(player_name: String, address: String, port: int = DEFAULT_PORT) -
 	print("Joining %s:%d as '%s'" % [address, port, player_name])
 	return OK
 
+var _disconnecting: bool = false
+
 func disconnect_game() -> void:
+	_disconnecting = true
+	players.clear()
+	is_online = false
 	if multiplayer.multiplayer_peer:
 		multiplayer.multiplayer_peer.close()
 		multiplayer.multiplayer_peer = null
-	players.clear()
-	is_online = false
+	_disconnecting = false
+	player_list_changed.emit()
 	print("Disconnected from game")
 
 func is_host() -> bool:
+	if not multiplayer.multiplayer_peer:
+		return false
 	return multiplayer.is_server()
 
 func get_my_peer_id() -> int:
@@ -102,16 +109,17 @@ func _unregister_player(peer_id: int) -> void:
 # ── Multiplayer callbacks ─────────────────────────────────────
 
 func _on_peer_connected(peer_id: int) -> void:
+	if _disconnecting:
+		return
 	print("Peer connected: %d" % peer_id)
 	player_connected.emit(peer_id)
-	# If we are the server, tell the new peer about ourselves
 	if is_host():
-		# Tell the newcomer about every existing player
 		_sync_player_list_to_all.rpc(players)
-	# Every peer sends its name to the server
 	_register_player_on_server.rpc_id(1, my_name)
 
 func _on_peer_disconnected(peer_id: int) -> void:
+	if _disconnecting:
+		return
 	print("Peer disconnected: %d" % peer_id)
 	_unregister_player(peer_id)
 	player_disconnected.emit(peer_id)

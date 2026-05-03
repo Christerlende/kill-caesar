@@ -299,7 +299,7 @@ func _influence_milestone_style(earned: bool) -> StyleBoxFlat:
 	return st
 
 func _influence_award_tooltip(is_patrician: bool, threshold: int, earned: bool) -> String:
-	var prefix = "Award earned: " if earned else "At %d influence: " % threshold
+	var prefix = "" if earned else "At %d influence: " % threshold
 	if is_patrician:
 		match threshold:
 			2:

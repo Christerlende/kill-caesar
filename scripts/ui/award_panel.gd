@@ -13,6 +13,9 @@ const AWARD_PLEBEIAN_6_AUTO_ELECTION: int = 2
 const AWARD_PATRICIAN_2_DOUBLE_DISCARD: int = 3
 const AWARD_PATRICIAN_4_ROLE_PEEK: int = 4
 const AWARD_PATRICIAN_6_EXECUTION: int = 5
+const AWARD_POLICY_5_SPENDING_LOCK: int = 6
+const AWARD_POLICY_7_NEXT_CONSUL: int = 7
+const AWARD_POLICY_11_INFLUENCE_CHOICE: int = 8
 
 var game_manager = null
 
@@ -26,6 +29,7 @@ var _handoff_complete: bool = false
 var _selected_player_ids: Array = []
 var _reveal_timer_active: bool = false
 var _execution_done: bool = false
+var _policy_choice_done: bool = false
 
 func _ready() -> void:
 	clip_contents = true
@@ -79,6 +83,7 @@ func reset_panel() -> void:
 	_selected_player_ids.clear()
 	_reveal_timer_active = false
 	_execution_done = false
+	_policy_choice_done = false
 	_continue_button.visible = false
 	_title_label.text = ""
 	_instruction_label.text = ""
@@ -91,6 +96,7 @@ func _start_award(award_id: int) -> void:
 	_selected_player_ids.clear()
 	_reveal_timer_active = false
 	_execution_done = false
+	_policy_choice_done = false
 	_continue_button.visible = false
 	_instruction_label.add_theme_color_override("font_color", COLOR_CREAM)
 	_clear_content()
@@ -102,7 +108,11 @@ func _start_award(award_id: int) -> void:
 
 func _show_handoff() -> void:
 	var consul_name = game_manager.get_player_name(game_manager.state.current_consul_index)
-	_instruction_label.text = "Pass the device to Consul %s. Only the consul should see the reveal." % consul_name
+	var award_id = game_manager.get_current_award_id()
+	if award_id == AWARD_POLICY_5_SPENDING_LOCK or award_id == AWARD_POLICY_7_NEXT_CONSUL or award_id == AWARD_POLICY_11_INFLUENCE_CHOICE:
+		_instruction_label.text = "Pass the device to Consul %s. The consul must resolve this policy choice." % consul_name
+	else:
+		_instruction_label.text = "Pass the device to Consul %s. Only the consul should see the reveal." % consul_name
 	var ready_button = Button.new()
 	ready_button.text = "Consul is ready"
 	ready_button.pressed.connect(_on_handoff_ready)
@@ -126,16 +136,25 @@ func _show_award_controls() -> void:
 		AWARD_PATRICIAN_6_EXECUTION:
 			_instruction_label.text = "The consul must kill one player. The consul cannot kill himself."
 			_build_player_buttons("Kill", _on_execution_target_selected)
+		AWARD_POLICY_5_SPENDING_LOCK:
+			_instruction_label.text = "Choose one player. That player cannot spend gold during the next spending phase."
+			_build_player_buttons("Restrict", _on_spending_lock_target_selected, true)
+		AWARD_POLICY_7_NEXT_CONSUL:
+			_instruction_label.text = "Choose one living player to become Consul next round."
+			_build_player_buttons("Choose", _on_next_consul_target_selected, true)
+		AWARD_POLICY_11_INFLUENCE_CHOICE:
+			_instruction_label.text = "Choose one influence bar to increase by +1. This does not trigger influence awards."
+			_build_influence_choice_buttons()
 		_:
 			_instruction_label.text = "No award to resolve."
 			_continue_button.visible = true
 
-func _build_player_buttons(button_text: String, callback: Callable) -> void:
+func _build_player_buttons(button_text: String, callback: Callable, include_consul: bool = false) -> void:
 	var row = HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 10)
 	_content.add_child(row)
-	for player_id in _eligible_target_ids():
+	for player_id in _eligible_target_ids(include_consul):
 		var b = Button.new()
 		b.text = "%s: %s" % [button_text, game_manager.get_player_name(player_id)]
 		b.pressed.connect(callback.bind(player_id))
@@ -159,7 +178,21 @@ func _build_two_role_picker() -> void:
 	reveal_button.pressed.connect(_on_two_role_reveal_pressed)
 	_content.add_child(reveal_button)
 
-func _eligible_target_ids() -> Array:
+func _build_influence_choice_buttons() -> void:
+	var row = HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	_content.add_child(row)
+	var patrician_button = Button.new()
+	patrician_button.text = "Patrician influence"
+	patrician_button.pressed.connect(_on_influence_choice_selected.bind(game_manager.Role.PATRICIAN))
+	row.add_child(patrician_button)
+	var plebeian_button = Button.new()
+	plebeian_button.text = "Plebeian influence"
+	plebeian_button.pressed.connect(_on_influence_choice_selected.bind(game_manager.Role.PLEBIAN))
+	row.add_child(plebeian_button)
+
+func _eligible_target_ids(include_consul: bool = false) -> Array:
 	var out = []
 	if not game_manager or not game_manager.state:
 		return out
@@ -167,7 +200,7 @@ func _eligible_target_ids() -> Array:
 		var player = game_manager.state.players[i]
 		if player.is_dead:
 			continue
-		if i == game_manager.state.current_consul_index:
+		if not include_consul and i == game_manager.state.current_consul_index:
 			continue
 		out.append(i)
 	return out
@@ -223,6 +256,39 @@ func _confirm_execution(player_id: int) -> void:
 	_instruction_label.text = "%s has been killed." % game_manager.get_player_name(player_id)
 	_continue_button.visible = true
 
+func _on_spending_lock_target_selected(player_id: int) -> void:
+	if _policy_choice_done:
+		return
+	if not game_manager.award_lock_player_spending(player_id):
+		_show_award_controls()
+		return
+	_policy_choice_done = true
+	_clear_content()
+	_instruction_label.text = "%s cannot spend gold next round." % game_manager.get_player_name(player_id)
+	_continue_button.visible = true
+
+func _on_next_consul_target_selected(player_id: int) -> void:
+	if _policy_choice_done:
+		return
+	if not game_manager.award_choose_next_consul(player_id):
+		_show_award_controls()
+		return
+	_policy_choice_done = true
+	_clear_content()
+	_instruction_label.text = "%s will be Consul next round." % game_manager.get_player_name(player_id)
+	_continue_button.visible = true
+
+func _on_influence_choice_selected(faction: int) -> void:
+	if _policy_choice_done:
+		return
+	if not game_manager.award_choose_influence_no_awards(faction):
+		_show_award_controls()
+		return
+	_policy_choice_done = true
+	_clear_content()
+	_instruction_label.text = "%s influence increased by +1. No influence awards are triggered." % game_manager.role_name(faction)
+	_continue_button.visible = true
+
 func _show_timed_reveal(text: String) -> void:
 	_reveal_timer_active = true
 	_clear_content()
@@ -263,6 +329,12 @@ func _award_title(award_id: int) -> String:
 			return "PATRICIAN INFLUENCE: ROLE PEEK"
 		AWARD_PATRICIAN_6_EXECUTION:
 			return "PATRICIAN INFLUENCE: EXECUTION"
+		AWARD_POLICY_5_SPENDING_LOCK:
+			return "PATRICIAN POLICY: SPENDING RESTRICTION"
+		AWARD_POLICY_7_NEXT_CONSUL:
+			return "PLEBEIAN POLICY: CHOOSE NEXT CONSUL"
+		AWARD_POLICY_11_INFLUENCE_CHOICE:
+			return "PLEBEIAN POLICY: CHOOSE INFLUENCE"
 		_:
 			return "INFLUENCE AWARD"
 

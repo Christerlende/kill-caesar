@@ -55,6 +55,9 @@ const AWARD_PLEBEIAN_6_AUTO_ELECTION: int = 2
 const AWARD_PATRICIAN_2_DOUBLE_DISCARD: int = 3
 const AWARD_PATRICIAN_4_ROLE_PEEK: int = 4
 const AWARD_PATRICIAN_6_EXECUTION: int = 5
+const AWARD_POLICY_5_SPENDING_LOCK: int = 6
+const AWARD_POLICY_7_NEXT_CONSUL: int = 7
+const AWARD_POLICY_11_INFLUENCE_CHOICE: int = 8
 const AWARD_THRESHOLDS: Array = [2, 4, 6]
 
 @onready var state: GameState = GameState.new()
@@ -407,14 +410,30 @@ func get_greed_chaos_slot_count() -> int:
 	return GREED_CHAOS_SLOT_COUNT
 
 func distribute_money():
-	for p in state.players:
+	for i in range(state.players.size()):
+		var p = state.players[i]
 		# Dead players don't earn gold
 		if p.is_dead:
+			continue
+		if _consume_income_block_for_player(i):
 			continue
 		var base_income = _base_income_for_role(p.role)
 		var tax_due = _calculate_income_tax(p.money, base_income)
 		var net_income = max(base_income - tax_due, 0)
 		p.money += net_income
+
+func _consume_income_block_for_player(player_id: int) -> bool:
+	var rounds_left = int(state.income_block_rounds_by_player.get(player_id, 0))
+	if rounds_left <= 0:
+		state.income_block_rounds_by_player.erase(player_id)
+		return false
+	rounds_left -= 1
+	if rounds_left <= 0:
+		state.income_block_rounds_by_player.erase(player_id)
+	else:
+		state.income_block_rounds_by_player[player_id] = rounds_left
+	print("Player %d receives no income this round." % (player_id + 1))
+	return true
 
 func print_current_consul():
 	var p = state.players[state.current_consul_index]
@@ -422,7 +441,13 @@ func print_current_consul():
 	print("Current phase: %s" % state.game_phase)
 
 func next_consul():
-	var next_index = _find_next_living_player(state.current_consul_index + 1)
+	var next_index = -1
+	if state.forced_next_consul_index >= 0 and state.forced_next_consul_index < state.players.size():
+		if not state.players[state.forced_next_consul_index].is_dead:
+			next_index = state.forced_next_consul_index
+	state.forced_next_consul_index = -1
+	if next_index < 0:
+		next_index = _find_next_living_player(state.current_consul_index + 1)
 	if next_index >= 0:
 		state.current_consul_index = next_index
 	# update runtime flags
@@ -633,8 +658,8 @@ func start_spending_phase() -> void:
 	state.spending_confirmed_players.clear()
 	for i in range(state.players.size()):
 		state.spending_private_inputs.append({"option": "A", "amount": 0})
-		# Dead players are auto-confirmed and skipped
-		state.spending_confirmed_players.append(state.players[i].is_dead)
+		# Dead and policy-locked players are auto-confirmed and skipped.
+		state.spending_confirmed_players.append(state.players[i].is_dead or _is_player_spending_locked(i))
 	# Find first alive player to input
 	state.spending_input_player_index = 0
 	while state.spending_input_player_index < state.players.size() and state.spending_confirmed_players[state.spending_input_player_index]:
@@ -653,6 +678,9 @@ func get_current_spending_player_money() -> int:
 		return 0
 	return state.players[state.spending_input_player_index].money
 
+func _is_player_spending_locked(player_id: int) -> bool:
+	return state.policy_spending_locked_player_ids.has(player_id)
+
 func set_spending_allocation(option_key: String, spend_amount: int) -> bool:
 	if state.game_phase != "spending" or state.spending_stage != "input":
 		return false
@@ -660,6 +688,8 @@ func set_spending_allocation(option_key: String, spend_amount: int) -> bool:
 	if player_id < 0 or player_id >= state.players.size():
 		return false
 	if state.players[player_id].is_dead:
+		return false
+	if _is_player_spending_locked(player_id):
 		return false
 	if option_key != "A" and option_key != "B":
 		return false
@@ -738,6 +768,7 @@ func resolve_spending_totals() -> void:
 		else:
 			state.spending_winner = "B"
 	state.spending_stage = "resolved"
+	state.policy_spending_locked_player_ids.clear()
 	if state.greed_round:
 		_schedule_enter_greed_after_delay()
 
@@ -1038,17 +1069,219 @@ func _apply_effect(effect_type: String, params: Dictionary) -> void:
 			_grant_random_assassination_token(target_role)
 		"tax_all":
 			collect_public_repair_contribution(int(params.get("amount", 0)))
+		"grant_influence":
+			var faction = Policy.role_from_string(str(params.get("faction", "plebeian")))
+			_grant_policy_influence(faction, int(params.get("amount", 1)))
+		"lose_gold_by_role":
+			var lose_role = Policy.role_from_string(str(params.get("role", "plebeian")))
+			_lose_gold_by_role(lose_role, int(params.get("amount", 0)))
+		"random_players_lose_gold":
+			_random_players_lose_gold(int(params.get("count", 1)), int(params.get("amount", 0)))
+		"queue_spending_lock_choice":
+			state.pending_post_result_awards.append(AWARD_POLICY_5_SPENDING_LOCK)
+		"queue_next_consul_choice":
+			state.pending_post_result_awards.append(AWARD_POLICY_7_NEXT_CONSUL)
+		"double_next_policy_gold":
+			state.double_next_policy_gold_active = true
+			print("The next policy gold gain will be doubled.")
+		"double_next_policy_influence":
+			state.double_next_policy_influence_active = true
+			print("The next standard policy influence gain will be doubled.")
+		"queue_influence_choice_no_awards":
+			state.pending_post_result_awards.append(AWARD_POLICY_11_INFLUENCE_CHOICE)
+		"skip_income_by_role":
+			var skipped_role = Policy.role_from_string(str(params.get("role", "caesar")))
+			_skip_income_by_role(skipped_role, int(params.get("rounds", 1)))
+		"direct_spending_lock_by_role":
+			var locked_role = Policy.role_from_string(str(params.get("role", "caesar")))
+			_direct_spending_lock_by_role(locked_role)
+		"set_random_role_assassination_counters":
+			var counter_role = Policy.role_from_string(str(params.get("role", "patrician")))
+			_set_random_role_assassination_counters(counter_role, int(params.get("target_count", 2)))
+		"gold_to_current_consul":
+			_gold_to_current_consul(int(params.get("amount", 0)))
+		"grant_assassination_token_to_current_consul":
+			_grant_assassination_token_to_current_consul()
+		"highest_influence_gain_or_all_lose_gold":
+			_highest_influence_gain_or_all_lose_gold(int(params.get("amount", 1)), int(params.get("gold_loss", 0)))
+		"lowest_influence_gain_or_all_gain_counters":
+			_lowest_influence_gain_or_all_gain_counters(int(params.get("amount", 2)))
+		"random_players_lose_all_gold":
+			_random_players_lose_all_gold(int(params.get("count", 1)))
 		"multi":
 			for sub_effect in params.get("effects", []):
 				_apply_effect(sub_effect.get("effect_type", ""), sub_effect.get("params", {}))
 		_:
 			push_warning("Unknown effect type: %s" % effect_type)
 
-func apply_benefit(faction: int, amount: int) -> void:
+func apply_benefit(faction: int, amount: int) -> bool:
+	if amount <= 0:
+		return false
+	var final_amount = amount
+	var recipients = _living_players_with_role(faction)
+	if recipients.is_empty():
+		return false
+	if state.double_next_policy_gold_active:
+		final_amount *= 2
+		state.double_next_policy_gold_active = false
 	for pl in state.players:
 		if pl.role == faction and not pl.is_dead:
-			pl.money += amount
-	print("Applied benefit %d gold to members of faction %d" % [amount, faction])
+			pl.money += final_amount
+	print("Applied benefit %d gold to members of faction %d" % [final_amount, faction])
+	return true
+
+func _living_players_with_role(role: int) -> Array:
+	var out = []
+	for i in range(state.players.size()):
+		var player = state.players[i]
+		if player.role == role and not player.is_dead:
+			out.append(i)
+	return out
+
+func _grant_policy_influence(faction: int, amount: int) -> void:
+	if amount <= 0:
+		return
+	if faction == Role.PATRICIAN:
+		var before_patrician = state.influence_patrician
+		state.influence_patrician += amount
+		_queue_awards_for_influence_gain(Role.PATRICIAN, before_patrician, state.influence_patrician)
+		print("Granted %d extra Patrician influence." % amount)
+	else:
+		var before_plebeian = state.influence_plebian
+		state.influence_plebian += amount
+		_queue_awards_for_influence_gain(Role.PLEBIAN, before_plebeian, state.influence_plebian)
+		print("Granted %d extra Plebeian influence." % amount)
+	check_win_condition()
+
+func _highest_influence_gain_or_all_lose_gold(amount: int, gold_loss: int) -> void:
+	if state.influence_patrician > state.influence_plebian:
+		_grant_policy_influence(Role.PATRICIAN, amount)
+	elif state.influence_plebian > state.influence_patrician:
+		_grant_policy_influence(Role.PLEBIAN, amount)
+	else:
+		_all_players_lose_gold(gold_loss)
+
+func _lowest_influence_gain_or_all_gain_counters(amount: int) -> void:
+	if state.influence_patrician < state.influence_plebian:
+		_grant_policy_influence(Role.PATRICIAN, amount)
+	elif state.influence_plebian < state.influence_patrician:
+		_grant_policy_influence(Role.PLEBIAN, amount)
+	else:
+		_all_living_players_gain_lethal_assassination_counter()
+
+func _lose_gold_by_role(role: int, amount: int) -> void:
+	if amount <= 0:
+		return
+	for player in state.players:
+		if player.role == role and not player.is_dead:
+			player.money = max(player.money - amount, 0)
+	print("Members of faction %d lost %d gold." % [role, amount])
+
+func _all_players_lose_gold(amount: int) -> void:
+	if amount <= 0:
+		return
+	for player in state.players:
+		if player.is_dead:
+			continue
+		player.money = max(player.money - amount, 0)
+	print("All living players lost %d gold." % amount)
+
+func _random_players_lose_gold(count: int, amount: int) -> void:
+	if count <= 0 or amount <= 0:
+		return
+	var candidates = []
+	for i in range(state.players.size()):
+		if not state.players[i].is_dead:
+			candidates.append(i)
+	candidates.shuffle()
+	var hits = min(count, candidates.size())
+	for i in range(hits):
+		var player_id = candidates[i]
+		state.players[player_id].money = max(state.players[player_id].money - amount, 0)
+		print("Player %d lost %d gold." % [player_id + 1, amount])
+
+func _gold_to_current_consul(amount: int) -> void:
+	if amount <= 0:
+		return
+	var consul_id = state.current_consul_index
+	if consul_id < 0 or consul_id >= state.players.size():
+		return
+	var consul = state.players[consul_id]
+	if consul.is_dead:
+		return
+	consul.money += amount
+	print("Consul Player %d gained %d gold." % [consul_id + 1, amount])
+
+func _grant_assassination_token_to_current_consul() -> void:
+	var consul_id = state.current_consul_index
+	if _grant_assassination_token_to_player_id(consul_id):
+		print("Consul Player %d gained an assassination token." % (consul_id + 1))
+	else:
+		print("Consul cannot receive another assassination token.")
+
+func _random_players_lose_all_gold(count: int) -> void:
+	if count <= 0:
+		return
+	var candidates = []
+	for i in range(state.players.size()):
+		if not state.players[i].is_dead:
+			candidates.append(i)
+	candidates.shuffle()
+	var hits = min(count, candidates.size())
+	for i in range(hits):
+		var player_id = candidates[i]
+		state.players[player_id].money = 0
+		print("Player %d lost all gold." % (player_id + 1))
+
+func _skip_income_by_role(role: int, rounds: int) -> void:
+	if rounds <= 0:
+		return
+	for i in range(state.players.size()):
+		var player = state.players[i]
+		if player.role == role and not player.is_dead:
+			state.income_block_rounds_by_player[i] = max(int(state.income_block_rounds_by_player.get(i, 0)), rounds)
+			print("Player %d will receive no income for %d rounds." % [i + 1, rounds])
+
+func _direct_spending_lock_by_role(role: int) -> void:
+	for i in range(state.players.size()):
+		var player = state.players[i]
+		if player.role == role and not player.is_dead and not state.policy_spending_locked_player_ids.has(i):
+			state.policy_spending_locked_player_ids.append(i)
+			print("Player %d cannot spend gold next round." % (i + 1))
+
+func _set_random_role_assassination_counters(role: int, target_count: int) -> void:
+	if target_count <= 0:
+		return
+	var candidates = []
+	for i in range(state.players.size()):
+		var player = state.players[i]
+		if player.role == role and not player.is_dead and get_tokens_on_player(i).size() < target_count:
+			candidates.append(i)
+	if candidates.is_empty():
+		print("No eligible player of role %d needs assassination counters." % role)
+		return
+	var target_id = candidates[randi() % candidates.size()]
+	var current_count = get_tokens_on_player(target_id).size()
+	for _i in range(target_count - current_count):
+		var token = AssassinationToken.new()
+		token.attacker_id = target_id
+		token.target_id = target_id
+		token.rounds_left = 3
+		token.placed_this_round = false
+		state.active_assassination_tokens.append(token)
+	print("Set Player %d assassination counters to %d." % [target_id + 1, target_count])
+
+func _all_living_players_gain_lethal_assassination_counter() -> void:
+	for i in range(state.players.size()):
+		if state.players[i].is_dead:
+			continue
+		var token = AssassinationToken.new()
+		token.attacker_id = -1
+		token.target_id = i
+		token.rounds_left = 3
+		token.placed_this_round = true
+		state.active_assassination_tokens.append(token)
+	print("All living players gained one lethal assassination counter.")
 
 func _grant_random_assassination_token(target_role: int) -> void:
 	var candidates: Array = []
@@ -1076,15 +1309,17 @@ func collect_public_repair_contribution(amount: int) -> void:
 func apply_policy_influence(policy: Policy) -> void:
 	if policy == null:
 		return
+	var amount = 2 if state.double_next_policy_influence_active else 1
+	state.double_next_policy_influence_active = false
 	if policy.faction == Role.PATRICIAN:
 		var before_patrician = state.influence_patrician
-		state.influence_patrician += 1
+		state.influence_patrician += amount
 		_queue_awards_for_influence_gain(Role.PATRICIAN, before_patrician, state.influence_patrician)
 	else:
 		var before_plebeian = state.influence_plebian
-		state.influence_plebian += 1
+		state.influence_plebian += amount
 		_queue_awards_for_influence_gain(Role.PLEBIAN, before_plebeian, state.influence_plebian)
-	print("Applied influence for policy %d (faction %d)" % [policy.id, policy.faction])
+	print("Applied %d influence for policy %d (faction %d)" % [amount, policy.id, policy.faction])
 
 func _queue_awards_for_influence_gain(faction: int, previous_value: int, current_value: int) -> void:
 	var triggered = state.patrician_award_thresholds_triggered if faction == Role.PATRICIAN else state.plebeian_award_thresholds_triggered
@@ -1240,6 +1475,48 @@ func award_execute_player(player_id: int) -> bool:
 		return false
 	target.is_dead = true
 	print("Influence award: Consul executed Player %d." % (player_id + 1))
+	check_win_condition()
+	return true
+
+func award_lock_player_spending(player_id: int) -> bool:
+	if state.game_phase != "award":
+		return false
+	if state.current_award_id != AWARD_POLICY_5_SPENDING_LOCK:
+		return false
+	if player_id < 0 or player_id >= state.players.size():
+		return false
+	if state.players[player_id].is_dead:
+		return false
+	if not state.policy_spending_locked_player_ids.has(player_id):
+		state.policy_spending_locked_player_ids.append(player_id)
+	print("Policy award: Player %d cannot spend gold next round." % (player_id + 1))
+	return true
+
+func award_choose_next_consul(player_id: int) -> bool:
+	if state.game_phase != "award":
+		return false
+	if state.current_award_id != AWARD_POLICY_7_NEXT_CONSUL:
+		return false
+	if player_id < 0 or player_id >= state.players.size():
+		return false
+	if state.players[player_id].is_dead:
+		return false
+	state.forced_next_consul_index = player_id
+	print("Policy award: Player %d will be next Consul." % (player_id + 1))
+	return true
+
+func award_choose_influence_no_awards(faction: int) -> bool:
+	if state.game_phase != "award":
+		return false
+	if state.current_award_id != AWARD_POLICY_11_INFLUENCE_CHOICE:
+		return false
+	if faction != Role.PATRICIAN and faction != Role.PLEBIAN:
+		return false
+	if faction == Role.PATRICIAN:
+		state.influence_patrician += 1
+	else:
+		state.influence_plebian += 1
+	print("Policy award: Increased faction %d influence without awards." % faction)
 	check_win_condition()
 	return true
 

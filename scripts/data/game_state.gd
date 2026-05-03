@@ -20,6 +20,11 @@ var pending_patrician_double_discard: bool = false
 var pending_plebeian_auto_election: bool = false
 var current_award_id: int = -1
 var auto_election_award_active: bool = false
+var policy_spending_locked_player_ids: Array = []
+var forced_next_consul_index: int = -1
+var double_next_policy_gold_active: bool = false
+var double_next_policy_influence_active: bool = false
+var income_block_rounds_by_player: Dictionary = {}
 
 # Phase result data for UI display
 # Election results

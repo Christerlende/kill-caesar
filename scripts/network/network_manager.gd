@@ -11,7 +11,7 @@ signal player_list_changed
 signal connection_failed
 signal connection_succeeded
 signal server_disconnected
-signal game_starting
+signal game_starting(roles: Array)
 
 const DEFAULT_PORT: int = 7000
 const MAX_PLAYERS: int = 6
@@ -158,4 +158,8 @@ func _sync_player_list_to_all(player_data: Dictionary) -> void:
 
 @rpc("authority", "reliable", "call_local")
 func start_game() -> void:
-	game_starting.emit()
+	game_starting.emit([])
+
+@rpc("authority", "reliable", "call_local")
+func start_game_with_roles(roles: Array) -> void:
+	game_starting.emit(roles)

@@ -1932,91 +1932,98 @@ func _receive_state_snapshot(data: Dictionary) -> void:
 		return
 	apply_state_snapshot(data)
 
-# ── Client → Host RPCs (any_peer) ─────────────────────────────
+# ── Client → Host RPCs (any_peer, call_local) ─────────────────
+#
+# call_local ensures the host also executes these when calling
+# .rpc_id(1) on itself. The _is_authority() guard prevents clients
+# from executing the logic locally when they receive the RPC.
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_select_nominee(nominee_index: int) -> void:
 	if not _is_authority():
 		return
 	select_election_nominee(nominee_index)
 	broadcast_state()
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_set_vote(player_id: int, is_yes: bool) -> void:
 	if not _is_authority():
 		return
 	set_election_vote(player_id, is_yes)
 	broadcast_state()
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_discard_policy(policy_id: int) -> void:
 	if not _is_authority():
 		return
 	discard_policy_by_id(policy_id)
 	broadcast_state()
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_set_spending(option_key: String, spend_amount: int) -> void:
 	if not _is_authority():
 		return
 	set_spending_allocation(option_key, spend_amount)
 	broadcast_state()
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_progress() -> void:
 	if not _is_authority():
 		return
 	progress()
 	broadcast_state()
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_place_assassination_token(attacker_id: int, target_id: int) -> void:
 	if not _is_authority():
 		return
 	place_assassination_token(attacker_id, target_id)
 	broadcast_state()
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_award_peek_role(player_id: int) -> void:
 	if not _is_authority():
 		return
 	var role = award_peek_role(player_id)
 	var sender = multiplayer.get_remote_sender_id()
-	_receive_peek_result.rpc_id(sender, player_id, role)
+	if sender == 0 or sender == multiplayer.get_unique_id():
+		_receive_peek_result(player_id, role)
+	else:
+		_receive_peek_result.rpc_id(sender, player_id, role)
 
 @rpc("authority", "reliable")
 func _receive_peek_result(_player_id: int, _role: int) -> void:
 	pass
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_award_execute(player_id: int) -> void:
 	if not _is_authority():
 		return
 	award_execute_player(player_id)
 	broadcast_state()
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_award_lock_spending(player_id: int) -> void:
 	if not _is_authority():
 		return
 	award_lock_player_spending(player_id)
 	broadcast_state()
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_award_choose_consul(player_id: int) -> void:
 	if not _is_authority():
 		return
 	award_choose_next_consul(player_id)
 	broadcast_state()
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_award_choose_influence(faction: int) -> void:
 	if not _is_authority():
 		return
 	award_choose_influence_no_awards(faction)
 	broadcast_state()
 
-@rpc("any_peer", "reliable")
+@rpc("any_peer", "reliable", "call_local")
 func rpc_finish_award() -> void:
 	if not _is_authority():
 		return

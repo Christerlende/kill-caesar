@@ -47,8 +47,12 @@ func _refresh_player_list() -> void:
 	player_list_label.text = "\n".join(lines) if lines.size() > 0 else "No players connected"
 	if _is_host:
 		var count = nm.get_player_count()
-		start_button.disabled = count < 2
-		start_button.text = "Start Game (%d/6 players)" % count
+		start_button.disabled = count < 1
+		var ai_count = 6 - count
+		if ai_count > 0:
+			start_button.text = "Start Game (%d player%s + %d AI)" % [count, "" if count == 1 else "s", ai_count]
+		else:
+			start_button.text = "Start Game (%d players)" % count
 
 func _on_connection_succeeded() -> void:
 	status_label.text = "Connected! Waiting for host to start…"

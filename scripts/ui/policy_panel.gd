@@ -101,7 +101,14 @@ func _process(_delta):
 	if stage == "reveal":
 		ui_key = "reveal|%d|%d" % [state.policy_enacted.id, viewer]
 	else:
-		ui_key = "%s|%s|%d|%d|%d" % [stage, _int_list(candidates), state.policy_discarded_ids.size(), _selected_policy_id, viewer]
+		ui_key = "%s|%s|%d|%d|%d|%s" % [
+			stage,
+			_int_list(candidates),
+			state.policy_discarded_ids.size(),
+			_selected_policy_id,
+			viewer,
+			"p2" if game_manager.is_patrician_double_discard_active() else "p0",
+		]
 	if ui_key == _last_ui_key:
 		return
 	_last_ui_key = ui_key
@@ -119,7 +126,8 @@ func _discard_view_mode(state, stage: String, viewer: int) -> String:
 	if stage == "consul":
 		if is_consul:
 			return "consul_act"
-		if is_co:
+		## Patrician double: Consul discards twice; co-consul is a spectator like everyone else.
+		if is_co and not game_manager.is_patrician_double_discard_active():
 			return "co_wait_consul"
 		return "observer"
 	if stage == "co_consul":
@@ -154,7 +162,9 @@ func _update_stage_label(state, stage: String) -> void:
 		var consul = state.players[state.current_consul_index]
 		_stage_label.text = "The Consul (%s) studies the roster in camera. These scrolls stay face-down until they choose." % game_manager.get_player_name(consul.player_id)
 	else:
-		if stage == "consul":
+		if stage == "consul" and game_manager.is_patrician_double_discard_active():
+			_stage_label.text = "The Consul is discarding two policies. The chamber waits."
+		elif stage == "consul":
 			_stage_label.text = "The Consul is removing one policy. The chamber waits."
 		else:
 			_stage_label.text = "The Co-Consul is removing one policy. The chamber waits."

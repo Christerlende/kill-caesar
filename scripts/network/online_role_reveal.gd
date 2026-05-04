@@ -2,7 +2,7 @@ extends Control
 
 ## Shows the local player their secret role before the game begins.
 ## In online mode each player sees only their own role on their own screen.
-## After the player clicks "Enter the Senate", the game scene loads.
+## Humans must all acknowledge before anyone loads the main game; AI seats skip this step.
 
 const GameManager = preload("res://scripts/game/game_manager.gd")
 const Role = preload("res://scripts/data/role.gd").Role
@@ -26,6 +26,7 @@ var _heading_label: Label
 var _role_label: Label
 var _detail_label: Label
 var _enter_button: Button
+var _waiting_label: Label
 var _reveal_time: float = 0.0
 var _role_shown: bool = false
 var _details_shown: bool = false
@@ -162,6 +163,17 @@ func _build_ui() -> void:
 	_enter_button.add_theme_stylebox_override("hover", btn_style)
 	vbox.add_child(_enter_button)
 
+	_waiting_label = Label.new()
+	_waiting_label.text = "Waiting for other representatives…"
+	_waiting_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_waiting_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_waiting_label.custom_minimum_size = Vector2(600, 0)
+	_waiting_label.visible = false
+	_waiting_label.add_theme_font_size_override("font_size", 22)
+	_waiting_label.add_theme_color_override("font_color", COLOR_DIM)
+	_waiting_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(_waiting_label)
+
 func _show_role() -> void:
 	_role_label.text = _role_display_name(_my_role)
 	match _my_role:
@@ -209,4 +221,12 @@ func _role_display_name(role: int) -> String:
 			return "Plebeian Representative"
 
 func _on_enter_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/game.tscn")
+	_enter_button.visible = false
+	_waiting_label.visible = true
+
+	var nm = get_node_or_null("/root/NetworkManager")
+	if nm == null or not nm.is_online:
+		get_tree().change_scene_to_file("res://scenes/game.tscn")
+		return
+
+	nm.notify_role_reveal_acknowledged()

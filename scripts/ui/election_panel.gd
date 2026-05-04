@@ -29,8 +29,7 @@ var _consul_label: Label
 var _nominee_label: Label
 var _instruction_label: Label
 var _nominee_btn_container: VBoxContainer
-## Hotseat only: which player index claims to hold the shared device (-1 = not chosen).
-var _hotseat_device_holder_seat: int = -1
+## Offline: use game_manager.hotseat_viewer_seat (shared with policy secrecy UI).
 var _hotseat_ai_nominate_attempted: bool = false
 var _last_nominee_button_key: String = ""
 var _last_device_row_key: String = ""
@@ -255,7 +254,9 @@ func _may_show_nominee_buttons(state) -> bool:
 func _effective_device_seat() -> int:
 	if game_manager.is_online_game():
 		return game_manager.get_local_seat()
-	return _hotseat_device_holder_seat
+	if game_manager:
+		return game_manager.hotseat_viewer_seat
+	return -1
 
 func _format_nomination_phase_message(state) -> String:
 	var consul_name: String = _player_name(state.current_consul_index)
@@ -269,7 +270,7 @@ func _format_nomination_phase_message(state) -> String:
 		return "The consul %s weighs the Senate.\nThose who may stand as co-consul: %s." % [consul_name, pool]
 
 	var is_online: bool = game_manager.is_online_game()
-	var holder: int = game_manager.get_local_seat() if is_online else _hotseat_device_holder_seat
+	var holder: int = game_manager.get_local_seat() if is_online else (game_manager.hotseat_viewer_seat if game_manager else -1)
 
 	if is_online:
 		if holder < 0:
@@ -293,7 +294,7 @@ func _sync_hotseat_device_row(state) -> void:
 	for i in range(state.players.size()):
 		if not state.players[i].is_dead:
 			key_parts.append(str(i))
-	var row_key: String = "|".join(key_parts) + "@" + str(_hotseat_device_holder_seat)
+	var row_key: String = "|".join(key_parts) + "@" + str(game_manager.hotseat_viewer_seat if game_manager else -1)
 	if row_key == _last_device_row_key and _nominee_btn_container.get_node_or_null("HotseatDeviceHolderRow"):
 		return
 	_last_device_row_key = row_key
@@ -315,7 +316,7 @@ func _sync_hotseat_device_row(state) -> void:
 			continue
 		var b = Button.new()
 		b.text = _player_name(i)
-		if i == _hotseat_device_holder_seat:
+		if i == (game_manager.hotseat_viewer_seat if game_manager else -1):
 			b.modulate = Color(1.1, 1.05, 0.85, 1)
 		b.pressed.connect(_on_hotseat_device_seat_pressed.bind(i))
 		row.add_child(b)
@@ -323,7 +324,8 @@ func _sync_hotseat_device_row(state) -> void:
 	_nominee_btn_container.add_child(row)
 
 func _on_hotseat_device_seat_pressed(seat: int) -> void:
-	_hotseat_device_holder_seat = seat
+	if game_manager:
+		game_manager.hotseat_viewer_seat = seat
 	_last_device_row_key = ""
 	_last_nominee_button_key = ""
 
@@ -617,7 +619,6 @@ func reset_panel() -> void:
 	_auto_resolve_queued = false
 	_result_reveal_played = false
 	_voting_reveal_played = false
-	_hotseat_device_holder_seat = -1
 	_hotseat_ai_nominate_attempted = false
 	_last_nominee_button_key = ""
 	_last_device_row_key = ""

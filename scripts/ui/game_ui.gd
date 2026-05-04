@@ -584,7 +584,8 @@ func _process(_delta):
 		if election_votes_container:
 			election_votes_container.visible = true
 	# Toggle policy panel vs legacy debug controls
-	var in_policy = state.game_phase == "policy" and state.policy_enacted == null and not election_transition_active
+	var policy_stage = game_manager.get_policy_discard_stage() if game_manager else ""
+	var in_policy = state.game_phase == "policy" and (state.policy_enacted == null or policy_stage == "reveal") and not election_transition_active
 	if policy_panel:
 		policy_panel.visible = in_policy
 		if _was_policy_panel_active and not in_policy:
@@ -906,10 +907,12 @@ func _build_actor_prompt_text(state) -> String:
 			else:
 				actor_text += "Resolve election"
 		"policy":
-			var stage = game_manager.get_policy_discard_stage()
-			if stage == "consul":
+			var pst = game_manager.get_policy_discard_stage()
+			if pst == "reveal":
+				actor_text += "Decree revealed — advancing to tribute"
+			elif pst == "consul":
 				actor_text += "Consul discards one policy"
-			elif stage == "co_consul":
+			elif pst == "co_consul":
 				actor_text += "Co-Consul discards one policy"
 			else:
 				actor_text += "Resolve policy"
@@ -957,7 +960,10 @@ func _build_phase_text(state) -> String:
 			lines.append("Blocked from co-consul this round: %s" % _player_list(state.ineligible_co_consul_indices))
 
 	# Policy results (show after policy phase)
-	if state.game_phase == "policy" and state.policy_enacted == null:
+	if state.game_phase == "policy" and game_manager.get_policy_discard_stage() == "reveal":
+		lines.append("")
+		lines.append("Decree reveal — public reading before tribute.")
+	elif state.game_phase == "policy" and state.policy_enacted == null:
 		lines.append("")
 		lines.append("Policies drawn: %s" % _policy_list(state.policy_drawn_ids))
 		lines.append("Policies discarded so far: %s" % _policy_list(state.policy_discarded_ids))
@@ -970,13 +976,15 @@ func _build_phase_text(state) -> String:
 			lines.append("Preparing policy choices")
 
 	if state.policy_enacted != null:
-		var faction_name = "Patrician" if state.policy_enacted.faction == game_manager.Role.PATRICIAN else "Plebeian"
-		var discarded_str = ", ".join(state.policy_discarded_ids.map(func(id): return "Policy #%d" % id))
-		lines.append("")
-		lines.append("Policies discarded: %s" % discarded_str)
-		lines.append("Policy enacted: #%d (%s)" % [state.policy_enacted.id, faction_name])
-		lines.append("  Decree 1: %s" % state.policy_enacted.option_a_text)
-		lines.append("  Decree 2: %s" % state.policy_enacted.option_b_text)
+		var is_policy_reveal = state.game_phase == "policy" and game_manager.get_policy_discard_stage() == "reveal"
+		if not is_policy_reveal:
+			var faction_name = "Patrician" if state.policy_enacted.faction == game_manager.Role.PATRICIAN else "Plebeian"
+			var discarded_str = ", ".join(state.policy_discarded_ids.map(func(id): return "Policy #%d" % id))
+			lines.append("")
+			lines.append("Policies discarded: %s" % discarded_str)
+			lines.append("Policy enacted: #%d (%s)" % [state.policy_enacted.id, faction_name])
+			lines.append("  Decree 1: %s" % state.policy_enacted.option_a_text)
+			lines.append("  Decree 2: %s" % state.policy_enacted.option_b_text)
 
 	# Spending results (show after spending phase)
 	if state.game_phase == "spending" and state.spending_stage == "input":

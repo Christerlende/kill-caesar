@@ -63,9 +63,16 @@ const AWARD_THRESHOLDS: Array = [2, 4, 6]
 @onready var state: GameState = GameState.new()
 var pending_policy_choices: Array = []
 var _discarded_policy_objects: Array = []
+## Populated during enact for the 5s reveal beat (same refs as returned to the deck).
+var last_reveal_discarded_policies: Array = []
 var policy_discard_stage: String = ""
 var _game_over_handled: bool = false
 var _patrician_double_discard_active: bool = false
+## Pass-and-play: which seat this device "sees" for secret phases (-1 = observers-only / safest).
+var hotseat_viewer_seat: int = -1
+var _policy_reveal_advance_pending: bool = false
+var _policy_reveal_seq: int = 0
+const POLICY_REVEAL_SECONDS: float = 5.0
 
 func role_name(role: int) -> String:
 	match role:
@@ -601,6 +608,9 @@ func _complete_successful_election(nominee: int) -> void:
 	co.co_consul_count += 1
 
 func start_policy_phase() -> void:
+	_policy_reveal_seq += 1
+	_policy_reveal_advance_pending = false
+	last_reveal_discarded_policies.clear()
 	pending_policy_choices.clear()
 	_discarded_policy_objects.clear()
 	_patrician_double_discard_active = false
@@ -613,7 +623,7 @@ func start_policy_phase() -> void:
 			pending_policy_choices.append(p)
 			state.policy_drawn_ids.append(p.id)
 	if pending_policy_choices.size() <= 1:
-		enact_remaining_policy()
+		enact_remaining_policy(false)
 		# No discard choices needed — skip straight to spending
 		state.game_phase = "spending"
 		start_spending_phase()
@@ -623,6 +633,7 @@ func start_policy_phase() -> void:
 		_patrician_double_discard_active = true
 	policy_discard_stage = "consul"
 	print("Policy phase started. Drawn policy IDs:", state.policy_drawn_ids)
+	_try_auto_ai_policy_discard()
 
 func get_policy_discard_candidates() -> Array:
 	var ids = []
@@ -639,7 +650,7 @@ func is_patrician_double_discard_active() -> bool:
 func discard_policy_by_id(policy_id: int) -> bool:
 	if state.game_phase != "policy":
 		return false
-	if policy_discard_stage == "":
+	if policy_discard_stage == "" or policy_discard_stage == "reveal":
 		return false
 	var found_index = -1
 	for i in range(pending_policy_choices.size()):
@@ -653,17 +664,19 @@ func discard_policy_by_id(policy_id: int) -> bool:
 	_discarded_policy_objects.append(pending_policy_choices[found_index])
 	pending_policy_choices.remove_at(found_index)
 	if pending_policy_choices.size() <= 1:
-		enact_remaining_policy()
+		enact_remaining_policy(true)
 		return true
 	if policy_discard_stage == "consul":
 		if _patrician_double_discard_active:
 			print("Patrician influence award: consul discarded policy %d and must discard again." % policy_id)
+			_try_auto_ai_policy_discard()
 			return true
 		policy_discard_stage = "co_consul"
 		print("Consul discarded policy %d. Co-consul must discard next." % policy_id)
+	_try_auto_ai_policy_discard()
 	return true
 
-func enact_remaining_policy() -> void:
+func enact_remaining_policy(apply_reveal_beat: bool) -> void:
 	if pending_policy_choices.size() == 0:
 		policy_discard_stage = ""
 		return
@@ -671,18 +684,70 @@ func enact_remaining_policy() -> void:
 	# Intentionally do NOT return the enacted policy to the deck.
 	# Enacted policies are removed from the game permanently.
 	pending_policy_choices.clear()
-	policy_discard_stage = "done"
 	_patrician_double_discard_active = false
 	# Return discarded policies to the deck and shuffle
+	last_reveal_discarded_policies = _discarded_policy_objects.duplicate()
 	for p in _discarded_policy_objects:
 		state.all_policies.append(p)
 	_discarded_policy_objects.clear()
 	state.all_policies.shuffle()
 	print("Final enacted policy %d (returned %d policies to deck)" % [state.policy_enacted.id, state.policy_discarded_ids.size()])
+	if apply_reveal_beat:
+		policy_discard_stage = "reveal"
+		_schedule_policy_reveal_advance()
+	else:
+		policy_discard_stage = ""
+		last_reveal_discarded_policies.clear()
+
+func _schedule_policy_reveal_advance() -> void:
+	if not _is_authority():
+		return
+	if _policy_reveal_advance_pending:
+		return
+	if policy_discard_stage != "reveal" or state.policy_enacted == null:
+		return
+	_policy_reveal_seq += 1
+	var seq: int = _policy_reveal_seq
+	_policy_reveal_advance_pending = true
+	var tree = get_tree()
+	if tree == null:
+		_policy_reveal_advance_pending = false
+		return
+	tree.create_timer(POLICY_REVEAL_SECONDS).timeout.connect(func(): _on_policy_reveal_timer_timeout(seq), CONNECT_ONE_SHOT)
+
+func _on_policy_reveal_timer_timeout(expected_seq: int) -> void:
+	_policy_reveal_advance_pending = false
+	if expected_seq != _policy_reveal_seq:
+		return
+	if state.game_phase != "policy" or policy_discard_stage != "reveal":
+		return
+	state.game_phase = "spending"
+	start_spending_phase()
+	broadcast_state()
+
+func _try_auto_ai_policy_discard() -> void:
+	if not _is_authority():
+		return
+	if state.game_phase != "policy":
+		return
+	if policy_discard_stage != "consul" and policy_discard_stage != "co_consul":
+		return
+	var actor: int = state.current_consul_index if policy_discard_stage == "consul" else state.current_co_consul_index
+	if actor < 0 or actor >= state.players.size():
+		return
+	if not state.players[actor].is_ai:
+		return
+	var ids = get_policy_discard_candidates()
+	if ids.size() == 0:
+		return
+	discard_policy_by_id(ids[randi() % ids.size()])
+	broadcast_state()
 
 func start_spending_phase() -> void:
 	if state.policy_enacted == null:
 		return
+	policy_discard_stage = ""
+	last_reveal_discarded_policies.clear()
 	state.spending_option_a_total = 0
 	state.spending_option_b_total = 0
 	state.spending_winner = ""
@@ -1445,6 +1510,9 @@ func progress():
 			if state.policy_enacted == null:
 				print("Complete policy discards first")
 				return
+			if policy_discard_stage == "reveal":
+				print("The senate is still reading the surviving decree.")
+				return
 			state.game_phase = "spending"
 			start_spending_phase()
 		"spending":
@@ -1712,6 +1780,11 @@ func get_local_seat() -> int:
 	var my_peer = multiplayer.get_unique_id()
 	return seat_for_peer.get(my_peer, -1)
 
+func get_policy_viewer_seat() -> int:
+	if is_online_game():
+		return get_local_seat()
+	return hotseat_viewer_seat
+
 func _authority_seat_for_rpc_sender() -> int:
 	if not _is_authority():
 		return -1
@@ -1748,6 +1821,8 @@ func is_local_player_turn_to_act() -> bool:
 				return true
 		"policy":
 			var stage = get_policy_discard_stage()
+			if stage == "reveal":
+				return false
 			if stage == "consul":
 				return seat == state.current_consul_index
 			elif stage == "co_consul":
@@ -1795,6 +1870,9 @@ func serialize_state() -> Dictionary:
 	var pending_data: Array = []
 	for pp in pending_policy_choices:
 		pending_data.append(_serialize_policy(pp))
+	var reveal_disc_data: Array = []
+	for rp in last_reveal_discarded_policies:
+		reveal_disc_data.append(_serialize_policy(rp))
 	return {
 		"round_number": state.round_number,
 		"influence_patrician": state.influence_patrician,
@@ -1831,6 +1909,7 @@ func serialize_state() -> Dictionary:
 		"current_award_id": state.current_award_id,
 		"pending_post_result_awards": state.pending_post_result_awards.duplicate(),
 		"policy_discard_stage": policy_discard_stage,
+		"last_reveal_discarded_policies": reveal_disc_data,
 		"pending_policy_count": pending_policy_choices.size(),
 		"pending_policies": pending_data,
 		"game_over_handled": _game_over_handled,
@@ -1950,6 +2029,9 @@ func apply_state_snapshot(data: Dictionary) -> void:
 	state.pending_post_result_awards = data.get("pending_post_result_awards", [])
 	# Internal
 	policy_discard_stage = str(data.get("policy_discard_stage", ""))
+	last_reveal_discarded_policies.clear()
+	for ppd in data.get("last_reveal_discarded_policies", []):
+		last_reveal_discarded_policies.append(_deserialize_policy(ppd))
 	_game_over_handled = bool(data.get("game_over_handled", false))
 	_patrician_double_discard_active = bool(data.get("patrician_double_discard_active", false))
 	# Pending policies
@@ -2024,6 +2106,11 @@ func rpc_resolve_election_tally() -> void:
 @rpc("any_peer", "reliable", "call_local")
 func rpc_discard_policy(policy_id: int) -> void:
 	if not _is_authority():
+		return
+	var seat: int = _authority_seat_for_rpc_sender()
+	if policy_discard_stage == "consul" and seat != state.current_consul_index:
+		return
+	if policy_discard_stage == "co_consul" and seat != state.current_co_consul_index:
 		return
 	discard_policy_by_id(policy_id)
 	broadcast_state()

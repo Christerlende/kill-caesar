@@ -1053,13 +1053,13 @@ func _on_nominee_button_pressed(nominee_index: int) -> void:
 
 func _on_vote_yes_pressed(player_id: int) -> void:
 	if game_manager.is_online_game():
-		game_manager.rpc_set_vote.rpc_id(1, player_id, true)
+		game_manager.rpc_submit_my_election_vote.rpc_id(1, true)
 	else:
 		game_manager.set_election_vote(player_id, true)
 
 func _on_vote_no_pressed(player_id: int) -> void:
 	if game_manager.is_online_game():
-		game_manager.rpc_set_vote.rpc_id(1, player_id, false)
+		game_manager.rpc_submit_my_election_vote.rpc_id(1, false)
 	else:
 		game_manager.set_election_vote(player_id, false)
 
@@ -1104,5 +1104,3 @@ func _on_spending_continue_pressed() -> void:
 		game_manager.rpc_progress.rpc_id(1)
 	else:
 		game_manager.progress()
-		if game_manager.state.game_phase == "round_end":
-			game_manager.progress()

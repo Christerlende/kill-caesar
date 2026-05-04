@@ -360,8 +360,6 @@ func _on_continue_pressed() -> void:
 			game_manager.rpc_finish_award.rpc_id(1)
 		else:
 			game_manager.finish_current_award()
-			if game_manager.state.game_phase == "round_end":
-				game_manager.progress()
 	reset_panel()
 
 func _clear_content() -> void:

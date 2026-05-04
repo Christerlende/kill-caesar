@@ -167,6 +167,14 @@ func _should_ai_vote_yes(voter_id: int, nominee_id: int) -> bool:
 func auto_fill_ai_election_votes() -> void:
 	if state.game_phase != "election" or state.election_nominee_index < 0:
 		return
+	if is_online_game():
+		for player_id in range(state.players.size()):
+			if state.election_vote_inputs[player_id] != -1:
+				continue
+			if not state.players[player_id].is_ai:
+				continue
+			set_election_vote(player_id, true)
+		return
 	var yes_count = 0
 	for vote in state.election_vote_inputs:
 		if vote == 1:
@@ -474,6 +482,12 @@ func get_nominee_candidates() -> Array:
 	for i in range(state.players.size()):
 		if i != state.current_consul_index and not state.ineligible_co_consul_indices.has(i) and not state.players[i].is_dead:
 			candidates.append(i)
+	## With few players, the blocked pair from the last successful election plus consul rotation
+	## can leave zero eligible nominees. Relax the block so the round can continue.
+	if candidates.size() == 0:
+		for i in range(state.players.size()):
+			if i != state.current_consul_index and not state.players[i].is_dead:
+				candidates.append(i)
 	return candidates
 
 func select_election_nominee(nominee_index: int) -> bool:
@@ -524,6 +538,17 @@ func are_election_votes_complete() -> bool:
 		return false
 	for i in range(state.election_vote_inputs.size()):
 		if state.players[i].is_dead:
+			continue
+		if state.election_vote_inputs[i] == -1:
+			return false
+	return true
+
+## Living human (non-AI) players have cast Yes/No. Used online to trigger tally while AI votes are still unset.
+func are_human_player_election_votes_complete() -> bool:
+	if state.election_vote_inputs.size() != state.players.size():
+		return false
+	for i in range(state.election_vote_inputs.size()):
+		if state.players[i].is_dead or state.players[i].is_ai:
 			continue
 		if state.election_vote_inputs[i] == -1:
 			return false
@@ -1378,6 +1403,13 @@ func _record_round_history() -> void:
 	}
 	state.round_history.push_front(entry)
 
+func _complete_round_turnover() -> void:
+	if _game_over_handled or state.game_phase == "game_over":
+		return
+	process_assassination_tokens_end_of_round()
+	next_consul()
+	start_round()
+
 func progress():
 	# Global guard: never advance if game is already over
 	if _game_over_handled:
@@ -1387,24 +1419,28 @@ func progress():
 			start_round()
 		"round_start":
 			state.game_phase = "election"
+			## Same frame as entering election (host + hotseat); online clients never ran hotseat AI pick.
+			auto_select_ai_nominee()
 		"election":
 			if state.election_nominee_index < 0:
 				auto_select_ai_nominee()
 			if state.election_nominee_index < 0:
 				print("Select a co-consul nominee first")
 				return
-			if not are_election_votes_complete():
-				auto_fill_ai_election_votes()
-			if not are_election_votes_complete():
-				print("Set all election votes first")
-				return
-			var election_passed = state.election_passed if (state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0) else conduct_election()
+			var already_tallied: bool = state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0
+			if not already_tallied:
+				if not are_election_votes_complete():
+					auto_fill_ai_election_votes()
+				if not are_election_votes_complete():
+					print("Set all election votes first")
+					return
+			var election_passed = state.election_passed if already_tallied else conduct_election()
 			if election_passed:
 				state.auto_election_award_active = false
 				state.game_phase = "policy"
 				start_policy_phase()
 			else:
-				state.game_phase = "round_end"
+				_complete_round_turnover()
 		"policy":
 			if state.policy_enacted == null:
 				print("Complete policy discards first")
@@ -1435,13 +1471,11 @@ func progress():
 					state.current_award_id = state.pending_post_result_awards.pop_front()
 					state.game_phase = "award"
 				else:
-					state.game_phase = "round_end"
+					_complete_round_turnover()
 		"award":
 			return
 		"round_end":
-			process_assassination_tokens_end_of_round()
-			next_consul()
-			start_round()
+			_complete_round_turnover()
 		"game_over":
 			print("Game is over!")
 		_:
@@ -1536,7 +1570,7 @@ func finish_current_award() -> void:
 		state.current_award_id = state.pending_post_result_awards.pop_front()
 	else:
 		state.current_award_id = AWARD_NONE
-		state.game_phase = "round_end"
+		_complete_round_turnover()
 
 # ─── Assassination Token System ───
 
@@ -1677,6 +1711,28 @@ func get_local_seat() -> int:
 		return -1
 	var my_peer = multiplayer.get_unique_id()
 	return seat_for_peer.get(my_peer, -1)
+
+func _authority_seat_for_rpc_sender() -> int:
+	if not _is_authority():
+		return -1
+	var peer_id: int = multiplayer.get_remote_sender_id()
+	if peer_id == 0:
+		peer_id = multiplayer.get_unique_id()
+	return seat_for_peer.get(peer_id, -1)
+
+## Tallies votes and applies co-consul outcome, but stays in game_phase "election" so clients can show the result overlay.
+func resolve_election_tally_if_ready() -> bool:
+	if state.game_phase != "election":
+		return false
+	if state.election_nominee_index < 0:
+		return false
+	if state.election_votes_yes.size() > 0 or state.election_votes_no.size() > 0:
+		return true
+	auto_fill_ai_election_votes()
+	if not are_election_votes_complete():
+		return false
+	conduct_election()
+	return true
 
 func is_local_player_turn_to_act() -> bool:
 	if not is_online_game():
@@ -1942,14 +1998,27 @@ func _receive_state_snapshot(data: Dictionary) -> void:
 func rpc_select_nominee(nominee_index: int) -> void:
 	if not _is_authority():
 		return
+	var seat: int = _authority_seat_for_rpc_sender()
+	if seat != state.current_consul_index:
+		return
 	select_election_nominee(nominee_index)
 	broadcast_state()
 
 @rpc("any_peer", "reliable", "call_local")
-func rpc_set_vote(player_id: int, is_yes: bool) -> void:
+func rpc_submit_my_election_vote(is_yes: bool) -> void:
 	if not _is_authority():
 		return
-	set_election_vote(player_id, is_yes)
+	var seat: int = _authority_seat_for_rpc_sender()
+	if seat < 0:
+		return
+	set_election_vote(seat, is_yes)
+	broadcast_state()
+
+@rpc("any_peer", "reliable", "call_local")
+func rpc_resolve_election_tally() -> void:
+	if not _is_authority():
+		return
+	resolve_election_tally_if_ready()
 	broadcast_state()
 
 @rpc("any_peer", "reliable", "call_local")

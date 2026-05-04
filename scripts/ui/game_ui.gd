@@ -64,6 +64,8 @@ const ACTION_PANEL_OFFSET_BOTTOM: float = -14.0
 const INFLUENCE_SEGMENT_HEIGHT: float = 24.0
 const INFLUENCE_MILESTONES: Array = [2, 4, 6]
 const INFLUENCE_MARKER_HOVER_PAD: float = 8.0
+const CLAIM_DEVICE_PURSE: String = "Claim your seat (Who holds the device?) to see your purse."
+const CLAIM_DEVICE_GOLD: String = "Claim your seat (Who holds the device?) to see your income here."
 
 func _ready():
 	# determine game manager reference
@@ -544,9 +546,12 @@ func _process(_delta):
 	if player_purses_label:
 		player_purses_label.text = _build_player_purses_text(state)
 	if gold_gain_label and state.players.size() > 0:
-		var viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
-		var viewer_role = state.players[viewer_index].role
-		gold_gain_label.text = "Gold gain each round: %d" % _gold_gain_for_role(viewer_role)
+		var vg: int = _sidebar_policy_viewer_index(state)
+		if vg < 0:
+			gold_gain_label.text = CLAIM_DEVICE_GOLD
+		else:
+			var viewer_role = state.players[vg].role
+			gold_gain_label.text = "Gold gain each round: %d" % _gold_gain_for_role(viewer_role)
 	if actor_prompt_label:
 		actor_prompt_label.text = _build_actor_prompt_text(state)
 	_update_chaos_counter_hud(state)
@@ -626,9 +631,9 @@ func _process(_delta):
 	var collapse_over = state.game_phase == "game_over" and GM.last_winner_text == ROME_COLLAPSE_WINNER
 	var in_result = state.game_phase == "result" or (state.game_phase == "game_over" and not collapse_over)
 	if result_panel:
-		var result_viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
-		if state.game_phase == "result" and state.spending_input_player_index >= 0:
-			result_viewer_index = clamp(state.spending_input_player_index, 0, state.players.size() - 1)
+		var result_viewer_index = _sidebar_policy_viewer_index(state)
+		if result_viewer_index < 0:
+			result_viewer_index = -1
 		result_panel.set_viewing_player(result_viewer_index)
 		result_panel.visible = in_result
 		if _was_result_panel_active and not in_result:
@@ -650,11 +655,13 @@ func _process(_delta):
 	# Toggle assassination tokens panel in the sidebar during active play, round start, and result
 	var in_assassination_mode = state.game_phase in ["round_start", "election", "policy", "spending", "greed", "result", "award"]
 	if assassination_tokens_panel:
-		var assassination_viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
-		if state.game_phase in ["spending", "result"] and state.spending_input_player_index >= 0:
-			assassination_viewer_index = clamp(state.spending_input_player_index, 0, state.players.size() - 1)
-		assassination_tokens_panel.set_viewing_player(assassination_viewer_index)
-		assassination_tokens_panel.visible = in_assassination_mode
+		var av: int = _sidebar_policy_viewer_index(state)
+		if in_assassination_mode and av >= 0:
+			assassination_tokens_panel.set_viewing_player(av)
+			assassination_tokens_panel.visible = true
+		else:
+			assassination_tokens_panel.set_viewing_player(-1)
+			assassination_tokens_panel.visible = false
 
 	_update_nominee_buttons(state)
 	_update_election_vote_buttons(state)
@@ -846,13 +853,21 @@ func _update_spending_controls(state) -> void:
 		continue_button.pressed.connect(Callable(self, "_on_spending_continue_pressed"))
 		spending_controls_container.add_child(continue_button)
 
+func _sidebar_policy_viewer_index(state) -> int:
+	if not game_manager or state.players.size() == 0:
+		return -1
+	var v: int = game_manager.get_policy_viewer_seat()
+	if v >= 0 and v < state.players.size():
+		return v
+	return -1
+
 func _build_player_purses_text(state) -> String:
 	if state.players.size() == 0:
 		return "No players"
 
-	var viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
-	if state.game_phase == "spending" and state.spending_stage == "input":
-		viewer_index = clamp(state.spending_input_player_index, 0, state.players.size() - 1)
+	var viewer_index = _sidebar_policy_viewer_index(state)
+	if viewer_index < 0:
+		return CLAIM_DEVICE_PURSE
 	var viewer = state.players[viewer_index]
 	var viewer_role = viewer.role
 	var own_gold = _visible_gold_for_player(state, viewer_index)
@@ -918,7 +933,16 @@ func _build_actor_prompt_text(state) -> String:
 				actor_text += "Resolve policy"
 		"spending":
 			if state.spending_stage == "input":
-				actor_text += "%s enters private spending" % _player_name(state.spending_input_player_index)
+				var vs: int = game_manager.get_policy_viewer_seat()
+				var active_sp: int = state.spending_input_player_index
+				if vs < 0 or vs >= state.players.size():
+					actor_text += "Private tribute — claim your seat to participate"
+				elif vs < state.spending_confirmed_players.size() and state.spending_confirmed_players[vs]:
+					actor_text += "You have rendered tribute — waiting on others"
+				elif vs == active_sp:
+					actor_text += "Cast your private treasury vote"
+				else:
+					actor_text += "Waiting for other representatives to cast tribute"
 			elif state.spending_stage == "handoff":
 				actor_text += "Pass to next player"
 			elif state.spending_stage == "resolved":
@@ -989,9 +1013,16 @@ func _build_phase_text(state) -> String:
 	# Spending results (show after spending phase)
 	if state.game_phase == "spending" and state.spending_stage == "input":
 		lines.append("")
-		lines.append("Private spending input in progress")
-		lines.append("Current player: %s" % _player_name(state.spending_input_player_index))
-		lines.append("Each player chooses one decree and an amount to spend")
+		var vph: int = game_manager.get_policy_viewer_seat()
+		var act_p: int = state.spending_input_player_index
+		if vph < 0 or vph >= state.players.size():
+			lines.append("Private tribute: claim your seat to see your status.")
+		elif vph < state.spending_confirmed_players.size() and state.spending_confirmed_players[vph]:
+			lines.append("You have rendered tribute. Waiting on other representatives.")
+		elif vph == act_p:
+			lines.append("Cast your treasury vote on one decree (main panel).")
+		else:
+			lines.append("Other representatives are casting tribute before you.")
 	elif state.game_phase == "spending" and state.spending_stage == "handoff":
 		lines.append("")
 		lines.append("Pass device to next player")

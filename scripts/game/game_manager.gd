@@ -202,34 +202,6 @@ func auto_fill_ai_election_votes() -> void:
 		if vote_yes:
 			yes_count += 1
 
-func _pick_ai_spending_choice(player_id: int) -> Dictionary:
-	var player = state.players[player_id]
-	var money = player.money
-	if money <= 0:
-		return {"option": "A", "amount": 0}
-
-	var a_score = _alignment_score(player.role, state.policy_enacted.option_a_beneficiary)
-	var b_score = _alignment_score(player.role, state.policy_enacted.option_b_beneficiary)
-	var option = "A"
-	var score = a_score
-	var a_amount = state.policy_enacted.option_a_effect_params.get("amount", 0)
-	var b_amount = state.policy_enacted.option_b_effect_params.get("amount", 0)
-	if b_score > a_score or (b_score == a_score and b_amount > a_amount):
-		option = "B"
-		score = b_score
-
-	var spend_ratio = 0.35
-	if score >= 2:
-		spend_ratio = 0.75
-	elif score == 1:
-		spend_ratio = 0.6
-	elif score < 0:
-		spend_ratio = 0.15
-
-	var amount = int(round(float(money) * spend_ratio))
-	amount = clamp(amount, 0, money)
-	return {"option": option, "amount": amount}
-
 func auto_run_ai_spending_inputs() -> void:
 	if state.game_phase != "spending":
 		return
@@ -247,8 +219,8 @@ func auto_run_ai_spending_inputs() -> void:
 			return
 		if not state.players[player_id].is_ai:
 			return
-		var choice = _pick_ai_spending_choice(player_id)
-		set_spending_allocation(choice.get("option", "A"), choice.get("amount", 0))
+		## Skip tribute: keep gold; human retains full control of the treasury vote.
+		set_spending_allocation("A", 0)
 
 # Election: consul nominates and players vote
 # Policy: consul/co-consul discard, apply influence, run money vote
@@ -768,6 +740,8 @@ func start_spending_phase() -> void:
 		return
 	state.spending_stage = "input"
 	print("Spending phase started. Waiting for Player %d private input." % state.spending_input_player_index)
+	if _is_authority():
+		auto_run_ai_spending_inputs()
 
 func get_current_spending_player_id() -> int:
 	return state.spending_input_player_index
@@ -807,6 +781,8 @@ func set_spending_allocation(option_key: String, spend_amount: int) -> bool:
 		state.spending_input_player_index = next_player
 		state.spending_stage = "input"
 	print("Player %d spending captured privately." % player_id)
+	if _is_authority():
+		auto_run_ai_spending_inputs()
 	return true
 
 func advance_spending_turn() -> bool:
@@ -926,6 +902,9 @@ func roll_greed_punishment_id() -> int:
 	return pool[pool.size() - 1].id
 
 func apply_greed_punishment(punishment_id: int) -> void:
+	## Punishments must apply only on the session authority; the Greed UI runs on all peers.
+	if is_online_game() and not _is_authority():
+		return
 	match punishment_id:
 		GREED_ROME_BURNS:
 			for pl in state.players:
@@ -975,6 +954,8 @@ func apply_greed_punishment(punishment_id: int) -> void:
 			print("Greed: Knives out.")
 		_:
 			push_warning("Unknown greed punishment: %d" % punishment_id)
+	if is_online_game() and _is_authority():
+		broadcast_state()
 
 func roll_deadlock_effect_id() -> int:
 	return randi_range(0, 3)
@@ -1526,6 +1507,8 @@ func progress():
 			state.game_phase = "result"
 			_record_round_history()
 		"greed":
+			## GreedPanel auto-advance timer calls rpc_progress online; must leave greed or phase stays stuck.
+			finish_greed_sequence()
 			return
 		"result":
 			# Effects are now applied by the result panel during fade-in animations.
@@ -1758,6 +1741,9 @@ func _is_authority() -> bool:
 	if not is_online_game():
 		return true
 	return multiplayer.is_server()
+
+func is_session_authority() -> bool:
+	return _is_authority()
 
 func setup_online_seats() -> void:
 	var nm = get_node_or_null("/root/NetworkManager")
@@ -2119,7 +2105,11 @@ func rpc_discard_policy(policy_id: int) -> void:
 func rpc_set_spending(option_key: String, spend_amount: int) -> void:
 	if not _is_authority():
 		return
-	set_spending_allocation(option_key, spend_amount)
+	var seat: int = _authority_seat_for_rpc_sender()
+	if state.spending_stage != "input" or seat != state.spending_input_player_index:
+		return
+	if not set_spending_allocation(option_key, spend_amount):
+		return
 	broadcast_state()
 
 @rpc("any_peer", "reliable", "call_local")

@@ -170,6 +170,8 @@ func set_viewing_player(player_id: int) -> void:
 
 func _start_fade_in_sequence(state) -> void:
 	_animation_started = true
+	if game_manager and game_manager.has_method("begin_result_milestone_resolution"):
+		game_manager.begin_result_milestone_resolution()
 	if _fade_tween:
 		_fade_tween.kill()
 		_fade_tween = null

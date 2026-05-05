@@ -249,7 +249,7 @@ func _ensure_influence_segments(bar: HBoxContainer, segment_count: int, is_patri
 			marker.custom_minimum_size = Vector2(6, INFLUENCE_SEGMENT_HEIGHT)
 			marker.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 			marker.mouse_filter = Control.MOUSE_FILTER_STOP
-			marker.tooltip_text = _influence_award_tooltip(is_patrician, threshold, false)
+			marker.tooltip_text = _influence_award_tooltip(is_patrician, threshold, false, false)
 			marker.set_meta("influence_milestone_threshold", threshold)
 			marker.set_meta("influence_milestone_is_patrician", is_patrician)
 			marker.mouse_entered.connect(_on_influence_milestone_hovered.bind(marker))
@@ -282,43 +282,64 @@ func _update_influence_segments(bar: HBoxContainer, value: int, segment_count: i
 			child.add_theme_stylebox_override("panel", st)
 		elif child.has_meta("influence_milestone_threshold"):
 			var threshold = int(child.get_meta("influence_milestone_threshold"))
-			var earned = value >= threshold
-			child.tooltip_text = _influence_award_tooltip(is_patrician, threshold, earned)
-			child.add_theme_stylebox_override("panel", _influence_milestone_style(earned))
+			var forfeited_list: Array = (
+				game_manager.state.patrician_milestones_forfeited
+				if is_patrician
+				else game_manager.state.plebeian_milestones_forfeited
+			) if game_manager and game_manager.state else []
+			var is_forfeited: bool = value >= threshold and forfeited_list.has(threshold)
+			var earned_bar: bool = value >= threshold and not is_forfeited
+			child.tooltip_text = _influence_award_tooltip(is_patrician, threshold, earned_bar, is_forfeited)
+			child.add_theme_stylebox_override("panel", _influence_milestone_style(earned_bar, is_forfeited))
 
-func _influence_milestone_style(earned: bool) -> StyleBoxFlat:
+func _influence_milestone_style(earned: bool, forfeited: bool) -> StyleBoxFlat:
 	var st = StyleBoxFlat.new()
-	st.bg_color = Color(1.0, 0.86, 0.24, 1.0) if earned else Color(0.48, 0.38, 0.15, 0.72)
+	if forfeited:
+		st.bg_color = Color(0.38, 0.38, 0.42, 0.88)
+		st.border_color = Color(0.58, 0.58, 0.62, 0.92)
+	elif earned:
+		st.bg_color = Color(1.0, 0.86, 0.24, 1.0)
+		st.border_color = Color(1.0, 0.95, 0.58, 0.95)
+	else:
+		st.bg_color = Color(0.48, 0.38, 0.15, 0.72)
+		st.border_color = Color(0.76, 0.62, 0.26, 0.75)
 	st.border_width_left = 1
 	st.border_width_top = 1
 	st.border_width_right = 1
 	st.border_width_bottom = 1
-	st.border_color = Color(1.0, 0.95, 0.58, 0.95) if earned else Color(0.76, 0.62, 0.26, 0.75)
 	st.corner_radius_top_left = 2
 	st.corner_radius_top_right = 2
 	st.corner_radius_bottom_left = 2
 	st.corner_radius_bottom_right = 2
 	return st
 
-func _influence_award_tooltip(is_patrician: bool, threshold: int, earned: bool) -> String:
-	var prefix = "" if earned else "At %d influence: " % threshold
+func _influence_award_tooltip(is_patrician: bool, threshold: int, reached: bool, is_forfeited: bool = false) -> String:
+	var desc: String = ""
 	if is_patrician:
 		match threshold:
 			2:
-				return prefix + "Next consul removes two policies; the co-consul removes none."
+				desc = "Next consul removes two policies; the co-consul removes none."
 			4:
-				return prefix + "Consul may inspect one player's secret role."
+				desc = "Consul may inspect one player's secret role."
 			6:
-				return prefix + "Consul must kill a player."
+				desc = "Consul must kill a player."
+			_:
+				desc = "Influence award."
 	else:
 		match threshold:
 			2:
-				return prefix + "Consul may inspect one player's secret role."
+				desc = "Consul may inspect one player's secret role."
 			4:
-				return prefix + "Consul inspects two chosen roles, without knowing which player has which role."
+				desc = "Consul inspects two chosen roles, without knowing which player has which role."
 			6:
-				return prefix + "Next co-consul nomination is automatically approved."
-	return prefix + "Influence award."
+				desc = "Next co-consul nomination is automatically approved."
+			_:
+				desc = "Influence award."
+	if is_forfeited:
+		return "At %d influence: %s\n\n(Lost — a policy milestone had already resolved first this round; decree influence crossed this band without a reward.)" % [threshold, desc]
+	if reached:
+		return desc
+	return "At %d influence: %s" % [threshold, desc]
 
 func _build_influence_tooltip_popup() -> void:
 	_influence_tooltip_panel = PanelContainer.new()
@@ -362,7 +383,14 @@ func _show_influence_tooltip_for_marker(marker: Control) -> void:
 	var threshold = int(marker.get_meta("influence_milestone_threshold", 0))
 	var is_patrician = bool(marker.get_meta("influence_milestone_is_patrician", false))
 	var current_value = game_manager.state.influence_patrician if is_patrician else game_manager.state.influence_plebian
-	_influence_tooltip_label.text = _influence_award_tooltip(is_patrician, threshold, current_value >= threshold)
+	var forfeited_list: Array = (
+		game_manager.state.patrician_milestones_forfeited
+		if is_patrician
+		else game_manager.state.plebeian_milestones_forfeited
+	)
+	var is_forfeited: bool = current_value >= threshold and forfeited_list.has(threshold)
+	var reached_bar: bool = current_value >= threshold and not is_forfeited
+	_influence_tooltip_label.text = _influence_award_tooltip(is_patrician, threshold, reached_bar, is_forfeited)
 	_influence_tooltip_panel.visible = true
 	_influence_tooltip_panel.reset_size()
 	var marker_rect = marker.get_global_rect()

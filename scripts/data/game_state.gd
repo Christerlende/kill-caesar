@@ -15,6 +15,9 @@ var game_phase: String = "init"
 # Influence awards
 var patrician_award_thresholds_triggered: Array = []
 var plebeian_award_thresholds_triggered: Array = []
+## Thresholds crossed by decree influence after a policy milestone fired same result (no reward, ever).
+var patrician_milestones_forfeited: Array = []
+var plebeian_milestones_forfeited: Array = []
 var pending_post_result_awards: Array = []
 var pending_patrician_double_discard: bool = false
 var pending_plebeian_auto_election: bool = false

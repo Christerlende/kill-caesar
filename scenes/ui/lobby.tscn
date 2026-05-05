@@ -16,21 +16,15 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+mouse_filter = 2
 color = Color(0.08, 0.04, 0.04, 1)
-
-[node name="BackButton" type="Button" parent="."]
-layout_mode = 1
-offset_left = 20.0
-offset_top = 20.0
-offset_right = 160.0
-offset_bottom = 64.0
-text = "Back to Menu"
 
 [node name="CenterContainer" type="CenterContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+mouse_filter = 2
 
 [node name="LobbyPanel" type="PanelContainer" parent="CenterContainer"]
 layout_mode = 2
@@ -79,3 +73,11 @@ layout_mode = 2
 text = "Waiting for host to start the game..."
 horizontal_alignment = 1
 theme_override_colors/font_color = Color(0.66, 0.58, 0.5, 1)
+
+[node name="BackButton" type="Button" parent="."]
+layout_mode = 1
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 160.0
+offset_bottom = 64.0
+text = "Back to Menu"

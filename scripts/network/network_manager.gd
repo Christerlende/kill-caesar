@@ -11,7 +11,7 @@ signal player_list_changed
 signal connection_failed
 signal connection_succeeded
 signal server_disconnected
-signal game_starting
+signal game_starting(roles: Array)
 
 const DEFAULT_PORT: int = 7000
 const MAX_PLAYERS: int = 6
@@ -20,6 +20,9 @@ const MAX_PLAYERS: int = 6
 var players: Dictionary = {}
 var my_name: String = "Player"
 var is_online: bool = false
+
+## peer_id → true for each human who acknowledged the online role-reveal screen.
+var _role_reveal_ready_peers: Dictionary = {}
 
 func _ready() -> void:
 	multiplayer.peer_connected.connect(_on_peer_connected)
@@ -158,4 +161,43 @@ func _sync_player_list_to_all(player_data: Dictionary) -> void:
 
 @rpc("authority", "reliable", "call_local")
 func start_game() -> void:
-	game_starting.emit()
+	game_starting.emit([])
+
+@rpc("authority", "reliable", "call_local")
+func start_game_with_roles(roles: Array) -> void:
+	_role_reveal_ready_peers.clear()
+	game_starting.emit(roles)
+
+## Local human finished reading their role; host waits until every connected player has done so
+## (AI seats have no client and are not counted).
+func notify_role_reveal_acknowledged() -> void:
+	if not is_online or multiplayer.multiplayer_peer == null:
+		return
+	if is_host():
+		_mark_role_reveal_ready(get_my_peer_id())
+		_try_complete_role_reveal()
+	else:
+		role_reveal_ack.rpc_id(1)
+
+@rpc("any_peer", "reliable")
+func role_reveal_ack() -> void:
+	if not is_host():
+		return
+	var pid: int = multiplayer.get_remote_sender_id()
+	_mark_role_reveal_ready(pid)
+	_try_complete_role_reveal()
+
+func _mark_role_reveal_ready(peer_id: int) -> void:
+	_role_reveal_ready_peers[peer_id] = true
+
+func _try_complete_role_reveal() -> void:
+	if not is_host():
+		return
+	for peer_id in get_sorted_peer_ids():
+		if not _role_reveal_ready_peers.get(peer_id, false):
+			return
+	role_reveal_all_proceed.rpc()
+
+@rpc("authority", "reliable", "call_local")
+func role_reveal_all_proceed() -> void:
+	get_tree().change_scene_to_file("res://scenes/game.tscn")

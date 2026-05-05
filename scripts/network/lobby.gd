@@ -47,8 +47,12 @@ func _refresh_player_list() -> void:
 	player_list_label.text = "\n".join(lines) if lines.size() > 0 else "No players connected"
 	if _is_host:
 		var count = nm.get_player_count()
-		start_button.disabled = count < 2
-		start_button.text = "Start Game (%d/6 players)" % count
+		start_button.disabled = count < 1
+		var ai_count = 6 - count
+		if ai_count > 0:
+			start_button.text = "Start Game (%d player%s + %d AI)" % [count, "" if count == 1 else "s", ai_count]
+		else:
+			start_button.text = "Start Game (%d players)" % count
 
 func _on_connection_succeeded() -> void:
 	status_label.text = "Connected! Waiting for host to start…"
@@ -68,21 +72,27 @@ func _on_start_pressed() -> void:
 		return
 	nm.assign_seats()
 	GameManager.influence_to_win = 7
-	nm.start_game.rpc()
+	var roles = _build_roles()
+	nm.start_game_with_roles.rpc(roles)
 
-func _on_game_starting() -> void:
+func _on_game_starting(roles: Array) -> void:
 	var nm = _get_network_manager()
-	# Build queued player names from seat order
 	var names: Array = []
 	var sorted = nm.get_sorted_peer_ids()
 	for peer_id in sorted:
 		names.append(nm.players[peer_id]["name"])
-	# Pad to 6 with AI players
 	while names.size() < 6:
 		names.append("AI %d" % (names.size() + 1))
 	GameManager.queue_player_names(names)
+	GameManager.queue_player_roles(roles)
 	GameManager.influence_to_win = 7
-	get_tree().change_scene_to_file("res://scenes/game.tscn")
+	get_tree().change_scene_to_file("res://scenes/ui/online_role_reveal.tscn")
+
+func _build_roles() -> Array:
+	const Role = preload("res://scripts/data/role.gd").Role
+	var roles = [Role.CAESAR, Role.PATRICIAN, Role.PATRICIAN, Role.PLEBIAN, Role.PLEBIAN, Role.PLEBIAN]
+	roles.shuffle()
+	return roles
 
 func _on_back_pressed() -> void:
 	var nm = _get_network_manager()

@@ -64,6 +64,8 @@ const ACTION_PANEL_OFFSET_BOTTOM: float = -14.0
 const INFLUENCE_SEGMENT_HEIGHT: float = 24.0
 const INFLUENCE_MILESTONES: Array = [2, 4, 6]
 const INFLUENCE_MARKER_HOVER_PAD: float = 8.0
+const CLAIM_DEVICE_PURSE: String = "Claim your seat (Who holds the device?) to see your purse."
+const CLAIM_DEVICE_GOLD: String = "Claim your seat (Who holds the device?) to see your income here."
 
 func _ready():
 	# determine game manager reference
@@ -247,7 +249,7 @@ func _ensure_influence_segments(bar: HBoxContainer, segment_count: int, is_patri
 			marker.custom_minimum_size = Vector2(6, INFLUENCE_SEGMENT_HEIGHT)
 			marker.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 			marker.mouse_filter = Control.MOUSE_FILTER_STOP
-			marker.tooltip_text = _influence_award_tooltip(is_patrician, threshold, false)
+			marker.tooltip_text = _influence_award_tooltip(is_patrician, threshold, false, false)
 			marker.set_meta("influence_milestone_threshold", threshold)
 			marker.set_meta("influence_milestone_is_patrician", is_patrician)
 			marker.mouse_entered.connect(_on_influence_milestone_hovered.bind(marker))
@@ -280,43 +282,64 @@ func _update_influence_segments(bar: HBoxContainer, value: int, segment_count: i
 			child.add_theme_stylebox_override("panel", st)
 		elif child.has_meta("influence_milestone_threshold"):
 			var threshold = int(child.get_meta("influence_milestone_threshold"))
-			var earned = value >= threshold
-			child.tooltip_text = _influence_award_tooltip(is_patrician, threshold, earned)
-			child.add_theme_stylebox_override("panel", _influence_milestone_style(earned))
+			var forfeited_list: Array = (
+				game_manager.state.patrician_milestones_forfeited
+				if is_patrician
+				else game_manager.state.plebeian_milestones_forfeited
+			) if game_manager and game_manager.state else []
+			var is_forfeited: bool = value >= threshold and forfeited_list.has(threshold)
+			var earned_bar: bool = value >= threshold and not is_forfeited
+			child.tooltip_text = _influence_award_tooltip(is_patrician, threshold, earned_bar, is_forfeited)
+			child.add_theme_stylebox_override("panel", _influence_milestone_style(earned_bar, is_forfeited))
 
-func _influence_milestone_style(earned: bool) -> StyleBoxFlat:
+func _influence_milestone_style(earned: bool, forfeited: bool) -> StyleBoxFlat:
 	var st = StyleBoxFlat.new()
-	st.bg_color = Color(1.0, 0.86, 0.24, 1.0) if earned else Color(0.48, 0.38, 0.15, 0.72)
+	if forfeited:
+		st.bg_color = Color(0.38, 0.38, 0.42, 0.88)
+		st.border_color = Color(0.58, 0.58, 0.62, 0.92)
+	elif earned:
+		st.bg_color = Color(1.0, 0.86, 0.24, 1.0)
+		st.border_color = Color(1.0, 0.95, 0.58, 0.95)
+	else:
+		st.bg_color = Color(0.48, 0.38, 0.15, 0.72)
+		st.border_color = Color(0.76, 0.62, 0.26, 0.75)
 	st.border_width_left = 1
 	st.border_width_top = 1
 	st.border_width_right = 1
 	st.border_width_bottom = 1
-	st.border_color = Color(1.0, 0.95, 0.58, 0.95) if earned else Color(0.76, 0.62, 0.26, 0.75)
 	st.corner_radius_top_left = 2
 	st.corner_radius_top_right = 2
 	st.corner_radius_bottom_left = 2
 	st.corner_radius_bottom_right = 2
 	return st
 
-func _influence_award_tooltip(is_patrician: bool, threshold: int, earned: bool) -> String:
-	var prefix = "" if earned else "At %d influence: " % threshold
+func _influence_award_tooltip(is_patrician: bool, threshold: int, reached: bool, is_forfeited: bool = false) -> String:
+	var desc: String = ""
 	if is_patrician:
 		match threshold:
 			2:
-				return prefix + "Next consul removes two policies; the co-consul removes none."
+				desc = "Next consul removes two policies; the co-consul removes none."
 			4:
-				return prefix + "Consul may inspect one player's secret role."
+				desc = "Consul may inspect one player's secret role."
 			6:
-				return prefix + "Consul must kill a player."
+				desc = "Consul must kill a player."
+			_:
+				desc = "Influence award."
 	else:
 		match threshold:
 			2:
-				return prefix + "Consul may inspect one player's secret role."
+				desc = "Consul may inspect one player's secret role."
 			4:
-				return prefix + "Consul inspects two chosen roles, without knowing which player has which role."
+				desc = "Consul inspects two chosen roles, without knowing which player has which role."
 			6:
-				return prefix + "Next co-consul nomination is automatically approved."
-	return prefix + "Influence award."
+				desc = "Next co-consul nomination is automatically approved."
+			_:
+				desc = "Influence award."
+	if is_forfeited:
+		return "At %d influence: %s\n\n(Lost — a policy milestone had already resolved first this round; decree influence crossed this band without a reward.)" % [threshold, desc]
+	if reached:
+		return desc
+	return "At %d influence: %s" % [threshold, desc]
 
 func _build_influence_tooltip_popup() -> void:
 	_influence_tooltip_panel = PanelContainer.new()
@@ -360,7 +383,14 @@ func _show_influence_tooltip_for_marker(marker: Control) -> void:
 	var threshold = int(marker.get_meta("influence_milestone_threshold", 0))
 	var is_patrician = bool(marker.get_meta("influence_milestone_is_patrician", false))
 	var current_value = game_manager.state.influence_patrician if is_patrician else game_manager.state.influence_plebian
-	_influence_tooltip_label.text = _influence_award_tooltip(is_patrician, threshold, current_value >= threshold)
+	var forfeited_list: Array = (
+		game_manager.state.patrician_milestones_forfeited
+		if is_patrician
+		else game_manager.state.plebeian_milestones_forfeited
+	)
+	var is_forfeited: bool = current_value >= threshold and forfeited_list.has(threshold)
+	var reached_bar: bool = current_value >= threshold and not is_forfeited
+	_influence_tooltip_label.text = _influence_award_tooltip(is_patrician, threshold, reached_bar, is_forfeited)
 	_influence_tooltip_panel.visible = true
 	_influence_tooltip_panel.reset_size()
 	var marker_rect = marker.get_global_rect()
@@ -544,9 +574,12 @@ func _process(_delta):
 	if player_purses_label:
 		player_purses_label.text = _build_player_purses_text(state)
 	if gold_gain_label and state.players.size() > 0:
-		var viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
-		var viewer_role = state.players[viewer_index].role
-		gold_gain_label.text = "Gold gain each round: %d" % _gold_gain_for_role(viewer_role)
+		var vg: int = _sidebar_policy_viewer_index(state)
+		if vg < 0:
+			gold_gain_label.text = CLAIM_DEVICE_GOLD
+		else:
+			var viewer_role = state.players[vg].role
+			gold_gain_label.text = "Gold gain each round: %d" % _gold_gain_for_role(viewer_role)
 	if actor_prompt_label:
 		actor_prompt_label.text = _build_actor_prompt_text(state)
 	_update_chaos_counter_hud(state)
@@ -584,7 +617,8 @@ func _process(_delta):
 		if election_votes_container:
 			election_votes_container.visible = true
 	# Toggle policy panel vs legacy debug controls
-	var in_policy = state.game_phase == "policy" and state.policy_enacted == null and not election_transition_active
+	var policy_stage = game_manager.get_policy_discard_stage() if game_manager else ""
+	var in_policy = state.game_phase == "policy" and (state.policy_enacted == null or policy_stage == "reveal") and not election_transition_active
 	if policy_panel:
 		policy_panel.visible = in_policy
 		if _was_policy_panel_active and not in_policy:
@@ -625,9 +659,9 @@ func _process(_delta):
 	var collapse_over = state.game_phase == "game_over" and GM.last_winner_text == ROME_COLLAPSE_WINNER
 	var in_result = state.game_phase == "result" or (state.game_phase == "game_over" and not collapse_over)
 	if result_panel:
-		var result_viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
-		if state.game_phase == "result" and state.spending_input_player_index >= 0:
-			result_viewer_index = clamp(state.spending_input_player_index, 0, state.players.size() - 1)
+		var result_viewer_index = _sidebar_policy_viewer_index(state)
+		if result_viewer_index < 0:
+			result_viewer_index = -1
 		result_panel.set_viewing_player(result_viewer_index)
 		result_panel.visible = in_result
 		if _was_result_panel_active and not in_result:
@@ -649,11 +683,13 @@ func _process(_delta):
 	# Toggle assassination tokens panel in the sidebar during active play, round start, and result
 	var in_assassination_mode = state.game_phase in ["round_start", "election", "policy", "spending", "greed", "result", "award"]
 	if assassination_tokens_panel:
-		var assassination_viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
-		if state.game_phase in ["spending", "result"] and state.spending_input_player_index >= 0:
-			assassination_viewer_index = clamp(state.spending_input_player_index, 0, state.players.size() - 1)
-		assassination_tokens_panel.set_viewing_player(assassination_viewer_index)
-		assassination_tokens_panel.visible = in_assassination_mode
+		var av: int = _sidebar_policy_viewer_index(state)
+		if in_assassination_mode and av >= 0:
+			assassination_tokens_panel.set_viewing_player(av)
+			assassination_tokens_panel.visible = true
+		else:
+			assassination_tokens_panel.set_viewing_player(-1)
+			assassination_tokens_panel.visible = false
 
 	_update_nominee_buttons(state)
 	_update_election_vote_buttons(state)
@@ -845,13 +881,21 @@ func _update_spending_controls(state) -> void:
 		continue_button.pressed.connect(Callable(self, "_on_spending_continue_pressed"))
 		spending_controls_container.add_child(continue_button)
 
+func _sidebar_policy_viewer_index(state) -> int:
+	if not game_manager or state.players.size() == 0:
+		return -1
+	var v: int = game_manager.get_policy_viewer_seat()
+	if v >= 0 and v < state.players.size():
+		return v
+	return -1
+
 func _build_player_purses_text(state) -> String:
 	if state.players.size() == 0:
 		return "No players"
 
-	var viewer_index = clamp(state.current_consul_index, 0, state.players.size() - 1)
-	if state.game_phase == "spending" and state.spending_stage == "input":
-		viewer_index = clamp(state.spending_input_player_index, 0, state.players.size() - 1)
+	var viewer_index = _sidebar_policy_viewer_index(state)
+	if viewer_index < 0:
+		return CLAIM_DEVICE_PURSE
 	var viewer = state.players[viewer_index]
 	var viewer_role = viewer.role
 	var own_gold = _visible_gold_for_player(state, viewer_index)
@@ -906,16 +950,27 @@ func _build_actor_prompt_text(state) -> String:
 			else:
 				actor_text += "Resolve election"
 		"policy":
-			var stage = game_manager.get_policy_discard_stage()
-			if stage == "consul":
+			var pst = game_manager.get_policy_discard_stage()
+			if pst == "reveal":
+				actor_text += "Decree revealed — advancing to tribute"
+			elif pst == "consul":
 				actor_text += "Consul discards one policy"
-			elif stage == "co_consul":
+			elif pst == "co_consul":
 				actor_text += "Co-Consul discards one policy"
 			else:
 				actor_text += "Resolve policy"
 		"spending":
 			if state.spending_stage == "input":
-				actor_text += "%s enters private spending" % _player_name(state.spending_input_player_index)
+				var vs: int = game_manager.get_policy_viewer_seat()
+				var active_sp: int = state.spending_input_player_index
+				if vs < 0 or vs >= state.players.size():
+					actor_text += "Private tribute — claim your seat to participate"
+				elif vs < state.spending_confirmed_players.size() and state.spending_confirmed_players[vs]:
+					actor_text += "You have rendered tribute — waiting on others"
+				elif vs == active_sp:
+					actor_text += "Cast your private treasury vote"
+				else:
+					actor_text += "Waiting for other representatives to cast tribute"
 			elif state.spending_stage == "handoff":
 				actor_text += "Pass to next player"
 			elif state.spending_stage == "resolved":
@@ -957,7 +1012,10 @@ func _build_phase_text(state) -> String:
 			lines.append("Blocked from co-consul this round: %s" % _player_list(state.ineligible_co_consul_indices))
 
 	# Policy results (show after policy phase)
-	if state.game_phase == "policy" and state.policy_enacted == null:
+	if state.game_phase == "policy" and game_manager.get_policy_discard_stage() == "reveal":
+		lines.append("")
+		lines.append("Decree reveal — public reading before tribute.")
+	elif state.game_phase == "policy" and state.policy_enacted == null:
 		lines.append("")
 		lines.append("Policies drawn: %s" % _policy_list(state.policy_drawn_ids))
 		lines.append("Policies discarded so far: %s" % _policy_list(state.policy_discarded_ids))
@@ -970,20 +1028,29 @@ func _build_phase_text(state) -> String:
 			lines.append("Preparing policy choices")
 
 	if state.policy_enacted != null:
-		var faction_name = "Patrician" if state.policy_enacted.faction == game_manager.Role.PATRICIAN else "Plebeian"
-		var discarded_str = ", ".join(state.policy_discarded_ids.map(func(id): return "Policy #%d" % id))
-		lines.append("")
-		lines.append("Policies discarded: %s" % discarded_str)
-		lines.append("Policy enacted: #%d (%s)" % [state.policy_enacted.id, faction_name])
-		lines.append("  Decree 1: %s" % state.policy_enacted.option_a_text)
-		lines.append("  Decree 2: %s" % state.policy_enacted.option_b_text)
+		var is_policy_reveal = state.game_phase == "policy" and game_manager.get_policy_discard_stage() == "reveal"
+		if not is_policy_reveal:
+			var faction_name = "Patrician" if state.policy_enacted.faction == game_manager.Role.PATRICIAN else "Plebeian"
+			var discarded_str = ", ".join(state.policy_discarded_ids.map(func(id): return "Policy #%d" % id))
+			lines.append("")
+			lines.append("Policies discarded: %s" % discarded_str)
+			lines.append("Policy enacted: #%d (%s)" % [state.policy_enacted.id, faction_name])
+			lines.append("  Decree 1: %s" % state.policy_enacted.option_a_text)
+			lines.append("  Decree 2: %s" % state.policy_enacted.option_b_text)
 
 	# Spending results (show after spending phase)
 	if state.game_phase == "spending" and state.spending_stage == "input":
 		lines.append("")
-		lines.append("Private spending input in progress")
-		lines.append("Current player: %s" % _player_name(state.spending_input_player_index))
-		lines.append("Each player chooses one decree and an amount to spend")
+		var vph: int = game_manager.get_policy_viewer_seat()
+		var act_p: int = state.spending_input_player_index
+		if vph < 0 or vph >= state.players.size():
+			lines.append("Private tribute: claim your seat to see your status.")
+		elif vph < state.spending_confirmed_players.size() and state.spending_confirmed_players[vph]:
+			lines.append("You have rendered tribute. Waiting on other representatives.")
+		elif vph == act_p:
+			lines.append("Cast your treasury vote on one decree (main panel).")
+		else:
+			lines.append("Other representatives are casting tribute before you.")
 	elif state.game_phase == "spending" and state.spending_stage == "handoff":
 		lines.append("")
 		lines.append("Pass device to next player")
@@ -1053,13 +1120,13 @@ func _on_nominee_button_pressed(nominee_index: int) -> void:
 
 func _on_vote_yes_pressed(player_id: int) -> void:
 	if game_manager.is_online_game():
-		game_manager.rpc_set_vote.rpc_id(1, player_id, true)
+		game_manager.rpc_submit_my_election_vote.rpc_id(1, true)
 	else:
 		game_manager.set_election_vote(player_id, true)
 
 func _on_vote_no_pressed(player_id: int) -> void:
 	if game_manager.is_online_game():
-		game_manager.rpc_set_vote.rpc_id(1, player_id, false)
+		game_manager.rpc_submit_my_election_vote.rpc_id(1, false)
 	else:
 		game_manager.set_election_vote(player_id, false)
 
@@ -1104,5 +1171,3 @@ func _on_spending_continue_pressed() -> void:
 		game_manager.rpc_progress.rpc_id(1)
 	else:
 		game_manager.progress()
-		if game_manager.state.game_phase == "round_end":
-			game_manager.progress()

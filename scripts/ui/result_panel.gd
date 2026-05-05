@@ -170,6 +170,8 @@ func set_viewing_player(player_id: int) -> void:
 
 func _start_fade_in_sequence(state) -> void:
 	_animation_started = true
+	if game_manager and game_manager.has_method("begin_result_milestone_resolution"):
+		game_manager.begin_result_milestone_resolution()
 	if _fade_tween:
 		_fade_tween.kill()
 		_fade_tween = null
@@ -477,6 +479,4 @@ func _on_continue_pressed() -> void:
 			game_manager.rpc_progress.rpc_id(1)
 		else:
 			game_manager.progress()
-			if game_manager.state.game_phase == "round_end":
-				game_manager.progress()
 		_last_ui_key = ""

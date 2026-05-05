@@ -10,6 +10,8 @@ const COLOR_DARK_BG = Color(0.08, 0.04, 0.03, 0.85)
 const COLOR_SCROLL_BG = Color(0.18, 0.12, 0.07, 0.95)
 const COLOR_SCROLL_BORDER = Color(0.6, 0.48, 0.2, 0.7)
 
+const CLAIM_DEVICE_SECRET_SIDEBAR: String = "Who holds the device? Tap your name on the election screen. Your secret role and purse will appear here — they stay on that seat for the whole game."
+
 var game_manager = null
 var _viewer_index: int = 0
 
@@ -20,6 +22,8 @@ var _tax_hint_label: Label
 var _intel_section: VBoxContainer
 var _policies_section: VBoxContainer
 var _policies_square_styles: Array = []
+var _plot_marks_section: VBoxContainer
+var _plot_marks_square_styles: Array = []
 var _lower_content_section: VBoxContainer
 var _rules_popup: PanelContainer
 var _howtowin_popup: PanelContainer
@@ -64,6 +68,9 @@ func _ready() -> void:
 	# --- Caesar Policies-Enacted Counter (only visible to Caesar) ---
 	_policies_section = _build_policies_section()
 	root.add_child(_policies_section)
+
+	_plot_marks_section = _build_plot_marks_section()
+	root.add_child(_plot_marks_section)
 
 	# --- Role Intel Section ---
 	_intel_section = VBoxContainer.new()
@@ -207,6 +214,50 @@ func _build_policies_section() -> VBoxContainer:
 	section.add_child(HSeparator.new())
 	return section
 
+func _build_plot_marks_section() -> VBoxContainer:
+	var section = VBoxContainer.new()
+	section.add_theme_constant_override("separation", 4)
+	section.visible = false
+
+	var header = Label.new()
+	header.text = "Plot against you"
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.add_theme_font_size_override("font_size", 16)
+	header.add_theme_color_override("font_color", COLOR_GOLD)
+	section.add_child(header)
+
+	var subtext = Label.new()
+	subtext.text = "Marks from Chaos (e.g. Caesar steps forth). Separate from assassination tokens in your hand. No effect from this punishment once you have two."
+	subtext.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtext.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	subtext.add_theme_font_size_override("font_size", 11)
+	subtext.add_theme_color_override("font_color", COLOR_DIM)
+	section.add_child(subtext)
+
+	var squares_row = HBoxContainer.new()
+	squares_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	squares_row.add_theme_constant_override("separation", 8)
+	section.add_child(squares_row)
+
+	_plot_marks_square_styles.clear()
+	for i in range(2):
+		var p = PanelContainer.new()
+		p.custom_minimum_size = Vector2(26, 26)
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.22, 0.14, 0.08, 0.55)
+		style.set_border_width_all(1)
+		style.border_color = Color(0.6, 0.35, 0.32, 0.65)
+		style.corner_radius_top_left = 4
+		style.corner_radius_top_right = 4
+		style.corner_radius_bottom_left = 4
+		style.corner_radius_bottom_right = 4
+		p.add_theme_stylebox_override("panel", style)
+		squares_row.add_child(p)
+		_plot_marks_square_styles.append(style)
+
+	section.add_child(HSeparator.new())
+	return section
+
 func _build_scroll_button(text: String) -> Button:
 	var btn = Button.new()
 	btn.text = text
@@ -303,22 +354,51 @@ func _process(_delta: float) -> void:
 	if not state or state.players.size() == 0:
 		return
 
-	_viewer_index = _get_viewer_index(state)
+	var v = game_manager.get_policy_viewer_seat()
+	if v < 0 or v >= state.players.size():
+		var ph_key = "sidebar_ph|%s|%d" % [state.game_phase, state.round_number]
+		if ph_key == _last_ui_key:
+			return
+		_last_ui_key = ph_key
+		_apply_secret_sidebar_placeholder()
+		return
+
+	_viewer_index = v
 	var player = state.players[_viewer_index]
-	var ui_key = "%d|%d|%d|%d" % [_viewer_index, player.money, player.role, player.co_consul_count]
+	var ui_key = "%d|%d|%d|%d|%d" % [_viewer_index, player.money, player.role, player.co_consul_count, player.caesar_plot_marks]
 	if ui_key == _last_ui_key:
 		return
 	_last_ui_key = ui_key
 
+	if _tax_hint_label:
+		_tax_hint_label.visible = true
 	_update_role_title(player)
 	_update_purse(player)
 	_update_policies_section(player)
+	_update_plot_marks_section(player)
 	_update_intel(state, player)
 
-func _get_viewer_index(state) -> int:
-	if state.game_phase == "spending" and state.spending_stage == "input":
-		return clamp(state.spending_input_player_index, 0, state.players.size() - 1)
-	return clamp(state.current_consul_index, 0, state.players.size() - 1)
+func _apply_secret_sidebar_placeholder() -> void:
+	_viewer_index = -1
+	_role_title_label.text = "Secret role:\n—"
+	_purse_amount_label.text = "—"
+	_income_label.text = ""
+	if _tax_hint_label:
+		_tax_hint_label.text = ""
+		_tax_hint_label.visible = false
+	if _policies_section:
+		_policies_section.visible = false
+	if _plot_marks_section:
+		_plot_marks_section.visible = false
+	for child in _intel_section.get_children():
+		child.queue_free()
+	var hint = Label.new()
+	hint.text = CLAIM_DEVICE_SECRET_SIDEBAR
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_font_size_override("font_size", 12)
+	hint.add_theme_color_override("font_color", COLOR_DIM)
+	_intel_section.add_child(hint)
 
 func _role_display_name(role: int) -> String:
 	match role:
@@ -398,6 +478,23 @@ func _update_policies_section(player) -> void:
 		else:
 			st.bg_color = Color(0.22, 0.14, 0.08, 0.55)
 			st.border_color = Color(0.6, 0.48, 0.2, 0.6)
+
+func _update_plot_marks_section(player) -> void:
+	if not _plot_marks_section:
+		return
+	if player.role != Role.CAESAR:
+		_plot_marks_section.visible = false
+		return
+	_plot_marks_section.visible = true
+	var marks: int = clampi(player.caesar_plot_marks, 0, 2)
+	for i in range(_plot_marks_square_styles.size()):
+		var st: StyleBoxFlat = _plot_marks_square_styles[i]
+		if i < marks:
+			st.bg_color = Color(0.55, 0.12, 0.1, 0.92)
+			st.border_color = Color(0.95, 0.45, 0.4, 0.9)
+		else:
+			st.bg_color = Color(0.22, 0.14, 0.08, 0.55)
+			st.border_color = Color(0.6, 0.35, 0.32, 0.65)
 
 func _update_intel(state, player) -> void:
 	for child in _intel_section.get_children():

@@ -73,8 +73,13 @@ var hotseat_viewer_seat: int = -1
 var _policy_reveal_advance_pending: bool = false
 var _policy_reveal_seq: int = 0
 const POLICY_REVEAL_SECONDS: float = 5.0
+## After treasury totals resolve (non-greed), session authority auto-advances to the result phase.
+const SPENDING_RESOLVED_TO_RESULT_SEC: float = 5.0
 ## While result panel runs policy then decree: if policy queued a milestone, decree influence only forfeits bands.
 var _policy_milestone_awarded_this_resolution: bool = false
+## Snapshotted when the result fade sequence starts, before policy +1 influence is applied — used for policy 17 tie logic.
+var _influence_snapshot_patrician_for_decree: int = 0
+var _influence_snapshot_plebian_for_decree: int = 0
 ## Prevents double auto-resolution of the same queued award (see try_auto_resolve_current_award_if_ai_consul).
 var _ai_award_auto_resolved_stamp: String = ""
 
@@ -263,6 +268,8 @@ func create_players():
 	state.pending_plebeian_auto_election = false
 	state.current_award_id = AWARD_NONE
 	_ai_award_auto_resolved_stamp = ""
+	_influence_snapshot_patrician_for_decree = 0
+	_influence_snapshot_plebian_for_decree = 0
 	state.auto_election_award_active = false
 	state.players.clear()
 	for i in range(6):
@@ -853,6 +860,22 @@ func resolve_spending_totals() -> void:
 	state.policy_spending_locked_player_ids.clear()
 	if state.greed_round:
 		_schedule_enter_greed_after_delay()
+		return
+	if _is_authority() and is_inside_tree():
+		get_tree().create_timer(SPENDING_RESOLVED_TO_RESULT_SEC).timeout.connect(
+			_on_spending_resolved_to_result_timeout, CONNECT_ONE_SHOT
+		)
+
+func _on_spending_resolved_to_result_timeout() -> void:
+	if not _is_authority():
+		return
+	if state.game_phase != "spending" or state.spending_stage != "resolved":
+		return
+	if state.greed_round:
+		return
+	progress()
+	if is_online_game():
+		broadcast_state()
 
 func _schedule_enter_greed_after_delay() -> void:
 	if not is_inside_tree():
@@ -1245,17 +1268,21 @@ func _grant_policy_influence(faction: int, amount: int) -> void:
 	check_win_condition()
 
 func _highest_influence_gain_or_all_lose_gold(amount: int, gold_loss: int) -> void:
-	if state.influence_patrician > state.influence_plebian:
+	var pat = _influence_snapshot_patrician_for_decree
+	var pleb = _influence_snapshot_plebian_for_decree
+	if pat > pleb:
 		_grant_policy_influence(Role.PATRICIAN, amount)
-	elif state.influence_plebian > state.influence_patrician:
+	elif pleb > pat:
 		_grant_policy_influence(Role.PLEBIAN, amount)
 	else:
 		_all_players_lose_gold(gold_loss)
 
 func _lowest_influence_gain_or_all_gain_counters(amount: int) -> void:
-	if state.influence_patrician < state.influence_plebian:
+	var pat = _influence_snapshot_patrician_for_decree
+	var pleb = _influence_snapshot_plebian_for_decree
+	if pat < pleb:
 		_grant_policy_influence(Role.PATRICIAN, amount)
-	elif state.influence_plebian < state.influence_patrician:
+	elif pleb < pat:
 		_grant_policy_influence(Role.PLEBIAN, amount)
 	else:
 		_all_living_players_gain_lethal_assassination_counter()
@@ -1532,6 +1559,9 @@ func progress():
 				return
 			if state.greed_round:
 				return
+			## Before policy +1 from the enacted card is applied (done in result panel). Used for tie-based decrees e.g. policy 17.
+			_influence_snapshot_patrician_for_decree = state.influence_patrician
+			_influence_snapshot_plebian_for_decree = state.influence_plebian
 			state.game_phase = "result"
 			_record_round_history()
 		"greed":
@@ -2031,6 +2061,8 @@ func serialize_state() -> Dictionary:
 		"pending_policies": pending_data,
 		"game_over_handled": _game_over_handled,
 		"patrician_double_discard_active": _patrician_double_discard_active,
+		"influence_snapshot_patrician_for_decree": _influence_snapshot_patrician_for_decree,
+		"influence_snapshot_plebian_for_decree": _influence_snapshot_plebian_for_decree,
 		"seat_for_peer": seat_for_peer.duplicate(),
 		"peer_for_seat": peer_for_seat.duplicate(),
 		# Static vars that clients need
@@ -2180,6 +2212,8 @@ func apply_state_snapshot(data: Dictionary) -> void:
 	last_round_number = int(data.get("last_round_number", 0))
 	last_caesar_override_faction = str(data.get("last_caesar_override_faction", ""))
 	last_player_snapshots = data.get("last_player_snapshots", [])
+	_influence_snapshot_patrician_for_decree = int(data.get("influence_snapshot_patrician_for_decree", state.influence_patrician))
+	_influence_snapshot_plebian_for_decree = int(data.get("influence_snapshot_plebian_for_decree", state.influence_plebian))
 
 func broadcast_state() -> void:
 	if not is_online_game() or not _is_authority():

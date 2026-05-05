@@ -416,11 +416,29 @@ func _build_resolved_controls(state) -> void:
 		wait.add_theme_color_override("font_color", COLOR_CREAM)
 		_controls_box.add_child(wait)
 
-	var proceed_btn = Button.new()
-	proceed_btn.text = "Proceed"
-	proceed_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	proceed_btn.pressed.connect(_on_resolved_proceed_pressed)
-	_controls_box.add_child(proceed_btn)
+	var wait_lbl = Label.new()
+	wait_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	wait_lbl.add_theme_font_size_override("font_size", 18)
+	wait_lbl.add_theme_color_override("font_color", COLOR_CREAM)
+	_controls_box.add_child(wait_lbl)
+	_run_resolved_countdown_to_results(wait_lbl)
+
+func _resolved_countdown_seconds_word(n: int) -> String:
+	return "second" if n == 1 else "seconds"
+
+func _run_resolved_countdown_to_results(label: Label) -> void:
+	var total: int = int(roundf(GameManager.SPENDING_RESOLVED_TO_RESULT_SEC))
+	total = maxi(1, total)
+	for i in range(total, 0, -1):
+		if not is_instance_valid(self) or not is_instance_valid(label):
+			return
+		if not game_manager or not game_manager.state:
+			return
+		if game_manager.state.game_phase != "spending" or game_manager.state.spending_stage != "resolved":
+			return
+		label.text = "Proceeding to results in %d %s…" % [i, _resolved_countdown_seconds_word(i)]
+		if i > 1:
+			await get_tree().create_timer(1.0).timeout
 
 func _on_option_minus_pressed(option_key: String) -> void:
 	if _draft_option != option_key or _draft_amount <= 0:
@@ -447,13 +465,6 @@ func _on_pay_pressed() -> void:
 
 func _on_pass_pressed() -> void:
 	game_manager.advance_spending_turn()
-	_last_ui_key = ""
-
-func _on_resolved_proceed_pressed() -> void:
-	if game_manager.is_online_game():
-		game_manager.rpc_progress.rpc_id(1)
-	else:
-		game_manager.progress()
 	_last_ui_key = ""
 
 func _show_dual_veto_immediate(card_a: PanelContainer, card_b: PanelContainer) -> void:

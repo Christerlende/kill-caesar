@@ -91,12 +91,24 @@ func _process(_delta):
 	var state = game_manager.state
 	if not state or state.game_phase != "policy":
 		return
-	if state.policy_enacted != null:
+	var stage = game_manager.get_policy_discard_stage()
+	if state.policy_enacted != null and stage != "reveal":
 		return
 
-	var stage = game_manager.get_policy_discard_stage()
 	var candidates = game_manager.get_policy_discard_candidates()
-	var ui_key = "%s|%s|%d|%d" % [stage, _int_list(candidates), state.policy_discarded_ids.size(), _selected_policy_id]
+	var viewer = game_manager.get_policy_viewer_seat()
+	var ui_key: String
+	if stage == "reveal":
+		ui_key = "reveal|%d|%d" % [state.policy_enacted.id, viewer]
+	else:
+		ui_key = "%s|%s|%d|%d|%d|%s" % [
+			stage,
+			_int_list(candidates),
+			state.policy_discarded_ids.size(),
+			_selected_policy_id,
+			viewer,
+			"p2" if game_manager.is_patrician_double_discard_active() else "p0",
+		]
 	if ui_key == _last_ui_key:
 		return
 	_last_ui_key = ui_key
@@ -104,59 +116,130 @@ func _process(_delta):
 	_update_stage_label(state, stage)
 	_rebuild_cards(state, stage, candidates)
 
-func _update_stage_label(state, stage: String) -> void:
+func _discard_view_mode(state, stage: String, viewer: int) -> String:
+	if stage == "reveal":
+		return "reveal"
+	var ci = state.current_consul_index
+	var coi_state = state.current_co_consul_index
+	var is_consul = viewer >= 0 and viewer == ci
+	var is_co = viewer >= 0 and viewer == coi_state
 	if stage == "consul":
+		if is_consul:
+			return "consul_act"
+		## Patrician double: Consul discards twice; co-consul is a spectator like everyone else.
+		if is_co and not game_manager.is_patrician_double_discard_active():
+			return "co_wait_consul"
+		return "observer"
+	if stage == "co_consul":
+		if is_co:
+			return "co_act"
+		if is_consul:
+			return "consul_wait_co"
+		return "observer"
+	return "observer"
+
+func _update_stage_label(state, stage: String) -> void:
+	if stage == "reveal":
+		_header_label.text = "DECREE REVEALED"
+		_stage_label.text = "The surviving scroll is read to the Senate."
+		return
+	_header_label.text = "REMOVE A POLICY"
+	var viewer = game_manager.get_policy_viewer_seat()
+	var mode = _discard_view_mode(state, stage, viewer)
+	if mode == "consul_act":
 		var consul = state.players[state.current_consul_index]
 		if game_manager.is_patrician_double_discard_active():
 			_stage_label.text = "Patrician influence reached 2. Consul (%s) removes two policies." % game_manager.get_player_name(consul.player_id)
 		else:
-			_stage_label.text = "Consul (%s) — choose a policy to discard" % game_manager.get_player_name(consul.player_id)
-	elif stage == "co_consul":
+			_stage_label.text = "Consul (%s) — choose a policy to discard." % game_manager.get_player_name(consul.player_id)
+	elif mode == "co_act":
+		var consul = state.players[state.current_consul_index]
+		_stage_label.text = "%s has culled one scroll. Co-Consul — strike another from what remains." % game_manager.get_player_name(consul.player_id)
+	elif mode == "consul_wait_co":
 		var co = state.players[state.current_co_consul_index]
-		_stage_label.text = "Co-Consul (%s) — choose a policy to discard" % game_manager.get_player_name(co.player_id)
+		_stage_label.text = "You have made your cut. %s now removes one decree from the two that remain." % game_manager.get_player_name(co.player_id)
+	elif mode == "co_wait_consul":
+		var consul = state.players[state.current_consul_index]
+		_stage_label.text = "The Consul (%s) studies the roster in camera. These scrolls stay face-down until they choose." % game_manager.get_player_name(consul.player_id)
 	else:
-		_stage_label.text = ""
+		if stage == "consul" and game_manager.is_patrician_double_discard_active():
+			_stage_label.text = "The Consul is discarding two policies. The chamber waits."
+		elif stage == "consul":
+			_stage_label.text = "The Consul is removing one policy. The chamber waits."
+		else:
+			_stage_label.text = "The Co-Consul is removing one policy. The chamber waits."
+
+func _find_pending_policy(policy_id: int):
+	for p in game_manager.pending_policy_choices:
+		if p.id == policy_id:
+			return p
+	return null
+
+func _may_act_discard(state, stage: String, viewer: int) -> bool:
+	if stage != "consul" and stage != "co_consul":
+		return false
+	if viewer < 0:
+		return false
+	if stage == "consul" and viewer == state.current_consul_index:
+		return true
+	if stage == "co_consul" and viewer == state.current_co_consul_index:
+		return true
+	return false
 
 func _rebuild_cards(state, stage: String, active_ids: Array) -> void:
 	for child in _cards_row.get_children():
 		child.queue_free()
 	_card_nodes.clear()
 
-	# All drawn policy IDs (always show 3 slots)
 	var all_drawn_ids = state.policy_drawn_ids
 	var discarded_ids = state.policy_discarded_ids
+	var viewer = game_manager.get_policy_viewer_seat()
+	var mode = _discard_view_mode(state, stage, viewer)
+	var may_act = _may_act_discard(state, stage, viewer)
 
+	if mode == "reveal":
+		for policy_id in all_drawn_ids:
+			var card: PanelContainer
+			if state.policy_enacted != null and policy_id == state.policy_enacted.id:
+				card = _build_policy_card(state.policy_enacted, false, false)
+			elif discarded_ids.has(policy_id):
+				card = _build_discarded_placeholder_card()
+			else:
+				card = _build_face_down_card()
+			_cards_row.add_child(card)
+			_card_nodes[policy_id] = card
+		_confirm_section.visible = false
+		return
+
+	var show_face_down_row = mode in ["observer", "co_wait_consul", "consul_wait_co"]
+
+	if show_face_down_row:
+		for policy_id in all_drawn_ids:
+			var card = _build_face_down_card()
+			_cards_row.add_child(card)
+			_card_nodes[policy_id] = card
+		_confirm_section.visible = false
+		return
+
+	# consul_act or co_act — build from drawn order
 	for policy_id in all_drawn_ids:
 		var is_discarded = discarded_ids.has(policy_id)
 		var is_active = active_ids.has(policy_id)
 		var is_selected = (policy_id == _selected_policy_id)
-
-		# Find the policy object if available
-		var policy = null
-		for p in game_manager.pending_policy_choices:
-			if p.id == policy_id:
-				policy = p
-				break
-
+		var policy = _find_pending_policy(policy_id)
 		var card: PanelContainer
-		if is_discarded and stage == "co_consul":
-			# Co-consul sees discarded card as blank — no info
-			card = _build_blank_card()
-		elif is_discarded:
-			# Consul stage: shouldn't happen (only 1 discard at consul stage)
-			card = _build_blank_card()
+		if is_discarded:
+			card = _build_discarded_placeholder_card()
 		elif is_selected:
-			card = _build_policy_card(policy, true, true)
+			card = _build_policy_card(policy, true, may_act)
 		elif is_active:
-			card = _build_policy_card(policy, false, true)
+			card = _build_policy_card(policy, false, may_act)
 		else:
-			card = _build_blank_card()
-
+			card = _build_face_down_card()
 		_cards_row.add_child(card)
 		_card_nodes[policy_id] = card
 
-	# Confirmation
-	if _selected_policy_id >= 0:
+	if may_act and _selected_policy_id >= 0:
 		_confirm_section.visible = true
 		_confirm_label.text = "Discard Policy #%d?" % _selected_policy_id
 	else:
@@ -247,7 +330,37 @@ func _build_policy_card(policy, is_greyed: bool, is_clickable: bool) -> PanelCon
 
 	return card
 
-func _build_blank_card() -> PanelContainer:
+func _build_face_down_card() -> PanelContainer:
+	var card = PanelContainer.new()
+	card.custom_minimum_size = Vector2(220, 280)
+	var card_style = StyleBoxFlat.new()
+	card_style.bg_color = COLOR_GREYED
+	card_style.border_color = COLOR_GREYED_BORDER
+	card_style.border_width_left = 3
+	card_style.border_width_top = 3
+	card_style.border_width_right = 3
+	card_style.border_width_bottom = 3
+	card_style.corner_radius_top_left = 4
+	card_style.corner_radius_top_right = 4
+	card_style.corner_radius_bottom_left = 4
+	card_style.corner_radius_bottom_right = 4
+	card_style.content_margin_left = 12.0
+	card_style.content_margin_right = 12.0
+	card_style.content_margin_top = 10.0
+	card_style.content_margin_bottom = 10.0
+	card.add_theme_stylebox_override("panel", card_style)
+
+	var col = VBoxContainer.new()
+	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	card.add_child(col)
+
+	var scroll_icon = _make_label("📜", 40, Color(0.4, 0.35, 0.25, 0.4), HORIZONTAL_ALIGNMENT_CENTER)
+	col.add_child(scroll_icon)
+
+	return card
+
+func _build_discarded_placeholder_card() -> PanelContainer:
 	var card = PanelContainer.new()
 	card.custom_minimum_size = Vector2(220, 280)
 	var card_style = StyleBoxFlat.new()
@@ -315,16 +428,23 @@ func reset_panel() -> void:
 # --- callbacks ---
 
 func _on_card_clicked(policy_id: int) -> void:
+	if not game_manager or not game_manager.state:
+		return
+	var st = game_manager.state
+	var stage = game_manager.get_policy_discard_stage()
+	if not _may_act_discard(st, stage, game_manager.get_policy_viewer_seat()):
+		return
 	_selected_policy_id = policy_id
-	_last_ui_key = ""  # force rebuild
+	_last_ui_key = ""
 
 func _on_confirm_pressed() -> void:
 	if _selected_policy_id >= 0:
-		game_manager.discard_policy_by_id(_selected_policy_id)
+		if game_manager.is_online_game():
+			game_manager.rpc_discard_policy.rpc_id(1, _selected_policy_id)
+		else:
+			game_manager.discard_policy_by_id(_selected_policy_id)
 		_selected_policy_id = -1
-		_last_ui_key = ""  # force rebuild
-		if game_manager and game_manager.state and game_manager.state.game_phase == "policy" and game_manager.state.policy_enacted != null:
-			game_manager.progress()
+		_last_ui_key = ""
 
 func _on_cancel_pressed() -> void:
 	_selected_policy_id = -1

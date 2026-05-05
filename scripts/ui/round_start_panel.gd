@@ -122,7 +122,10 @@ func _auto_advance(sequence_id: int) -> void:
 		return
 	if game_manager.state.game_phase != "round_start":
 		return
-	game_manager.progress()
+	if game_manager.is_online_game():
+		game_manager.rpc_progress.rpc_id(1)
+	else:
+		game_manager.progress()
 
 func reset_panel() -> void:
 	_sequence_id += 1

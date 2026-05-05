@@ -85,6 +85,53 @@ Replace `<remote-branch-name>` with the name of the remote branch you want to tr
 
 ---
 
+## Playing online with friends
+
+Kill Caesar supports online multiplayer over a local network (or the internet with port forwarding).
+
+### Option 1 — Download a pre-built executable (easiest)
+
+Go to the [Releases](https://github.com/Christerlende/kill-caesar/releases) page and download the build for your platform:
+
+| Platform | File |
+|----------|------|
+| Windows | `KillCaesar.exe` |
+| Linux | `KillCaesar.x86_64` |
+| macOS | `KillCaesar.zip` |
+
+Double-click to run — no Godot installation needed.
+
+### Option 2 — Build from source
+
+If there's no release yet, you can export the game yourself:
+
+1. Install [Godot 4.6.1](https://godotengine.org/download) and the matching [export templates](https://godotengine.org/download)
+2. Open the project in Godot
+3. Go to **Project → Export…** and click **Export Project** for your platform
+4. Share the resulting file with friends
+
+### How to connect
+
+1. **Host** clicks **Play Online** → enters a name → **Host Game**
+2. The host shares their **IP address** with friends (find it via `ipconfig` on Windows or `ip addr` on Linux)
+3. **Friends** click **Play Online** → enter a name → type the host's IP → **Join Game**
+4. Once everyone is in the lobby, the host clicks **Start Game**
+
+**Default port:** 7000. If you're playing over the internet, the host needs to forward port 7000 (UDP) on their router.
+
+### Creating a release (automatic builds)
+
+Push a version tag to trigger the GitHub Actions workflow:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+This builds Windows, Linux, and macOS executables and attaches them to the GitHub Release automatically.
+
+---
+
 ## Project structure
 
 ```

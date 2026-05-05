@@ -73,7 +73,10 @@ func _process(_delta: float) -> void:
 	var state = game_manager.state
 	if state.game_phase != "award":
 		return
-	var award_id = state.current_award_id
+	game_manager.try_auto_resolve_current_award_if_ai_consul()
+	if game_manager.state.game_phase != "award":
+		return
+	var award_id = game_manager.state.current_award_id
 	if award_id != _last_award_id:
 		_start_award(award_id)
 
@@ -92,7 +95,6 @@ func reset_panel() -> void:
 
 func _start_award(award_id: int) -> void:
 	_last_award_id = award_id
-	_handoff_complete = award_id == AWARD_PATRICIAN_6_EXECUTION
 	_selected_player_ids.clear()
 	_reveal_timer_active = false
 	_execution_done = false
@@ -101,10 +103,30 @@ func _start_award(award_id: int) -> void:
 	_instruction_label.add_theme_color_override("font_color", COLOR_CREAM)
 	_clear_content()
 	_title_label.text = _award_title(award_id)
+
+	if game_manager.is_online_game():
+		if not game_manager.is_local_player_turn_to_act():
+			_handoff_complete = false
+			_show_online_waiting()
+			return
+		_handoff_complete = true
+		_show_award_controls()
+		return
+
+	_handoff_complete = award_id == AWARD_PATRICIAN_6_EXECUTION
 	if _handoff_complete:
 		_show_award_controls()
 	else:
 		_show_handoff()
+
+func _show_online_waiting() -> void:
+	var consul_name = game_manager.get_player_name(game_manager.state.current_consul_index)
+	var st = game_manager.state
+	if st.current_consul_index >= 0 and st.current_consul_index < st.players.size() and st.players[st.current_consul_index].is_ai:
+		_instruction_label.text = "The Consul is resolving this award."
+	else:
+		_instruction_label.text = "Waiting for Consul %s to resolve this award." % consul_name
+	_continue_button.visible = false
 
 func _show_handoff() -> void:
 	var consul_name = game_manager.get_player_name(game_manager.state.current_consul_index)
@@ -123,6 +145,9 @@ func _on_handoff_ready() -> void:
 	_show_award_controls()
 
 func _show_award_controls() -> void:
+	if game_manager.is_online_game() and not game_manager.is_local_player_turn_to_act():
+		_show_online_waiting()
+		return
 	_clear_content()
 	_continue_button.visible = false
 	var award_id = game_manager.get_current_award_id()
@@ -134,8 +159,12 @@ func _show_award_controls() -> void:
 			_instruction_label.text = "Choose two players. You will see only the two roles, not which role belongs to which player."
 			_build_two_role_picker()
 		AWARD_PATRICIAN_6_EXECUTION:
-			_instruction_label.text = "The consul must kill one player. The consul cannot kill himself."
-			_build_player_buttons("Kill", _on_execution_target_selected)
+			var exec_hint = "The consul must kill one player. The consul cannot kill himself."
+			var st = game_manager.state
+			if st.current_consul_index >= 0 and st.current_consul_index < st.players.size() and st.players[st.current_consul_index].role == game_manager.Role.PATRICIAN:
+				exec_hint += " A Patrician Consul cannot kill the other Patrician."
+			_instruction_label.text = exec_hint
+			_build_player_buttons("Kill", _on_execution_target_selected, false, true)
 		AWARD_POLICY_5_SPENDING_LOCK:
 			_instruction_label.text = "Choose one player. That player cannot spend gold during the next spending phase."
 			_build_player_buttons("Restrict", _on_spending_lock_target_selected, true)
@@ -149,12 +178,13 @@ func _show_award_controls() -> void:
 			_instruction_label.text = "No award to resolve."
 			_continue_button.visible = true
 
-func _build_player_buttons(button_text: String, callback: Callable, include_consul: bool = false) -> void:
+func _build_player_buttons(button_text: String, callback: Callable, include_consul: bool = false, execution_mode: bool = false) -> void:
 	var row = HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 10)
 	_content.add_child(row)
-	for player_id in _eligible_target_ids(include_consul):
+	var ids: Array = _eligible_execution_target_ids() if execution_mode else _eligible_target_ids(include_consul)
+	for player_id in ids:
 		var b = Button.new()
 		b.text = "%s: %s" % [button_text, game_manager.get_player_name(player_id)]
 		b.pressed.connect(callback.bind(player_id))
@@ -205,6 +235,15 @@ func _eligible_target_ids(include_consul: bool = false) -> Array:
 		out.append(i)
 	return out
 
+func _eligible_execution_target_ids() -> Array:
+	var out = []
+	if not game_manager or not game_manager.state:
+		return out
+	for i in range(game_manager.state.players.size()):
+		if game_manager.is_patrician_execution_target_allowed(i):
+			out.append(i)
+	return out
+
 func _on_single_peek_selected(player_id: int) -> void:
 	if _reveal_timer_active:
 		return
@@ -248,20 +287,30 @@ func _on_execution_target_selected(player_id: int) -> void:
 	row.add_child(cancel)
 
 func _confirm_execution(player_id: int) -> void:
-	if not game_manager.award_execute_player(player_id):
-		_show_award_controls()
-		return
-	_execution_done = true
-	_clear_content()
-	_instruction_label.text = "%s has been killed." % game_manager.get_player_name(player_id)
-	_continue_button.visible = true
+	if game_manager.is_online_game():
+		game_manager.rpc_award_execute.rpc_id(1, player_id)
+		_execution_done = true
+		_clear_content()
+		_instruction_label.text = "%s has been killed." % game_manager.get_player_name(player_id)
+		_continue_button.visible = true
+	else:
+		if not game_manager.award_execute_player(player_id):
+			_show_award_controls()
+			return
+		_execution_done = true
+		_clear_content()
+		_instruction_label.text = "%s has been killed." % game_manager.get_player_name(player_id)
+		_continue_button.visible = true
 
 func _on_spending_lock_target_selected(player_id: int) -> void:
 	if _policy_choice_done:
 		return
-	if not game_manager.award_lock_player_spending(player_id):
-		_show_award_controls()
-		return
+	if game_manager.is_online_game():
+		game_manager.rpc_award_lock_spending.rpc_id(1, player_id)
+	else:
+		if not game_manager.award_lock_player_spending(player_id):
+			_show_award_controls()
+			return
 	_policy_choice_done = true
 	_clear_content()
 	_instruction_label.text = "%s cannot spend gold next round." % game_manager.get_player_name(player_id)
@@ -270,9 +319,12 @@ func _on_spending_lock_target_selected(player_id: int) -> void:
 func _on_next_consul_target_selected(player_id: int) -> void:
 	if _policy_choice_done:
 		return
-	if not game_manager.award_choose_next_consul(player_id):
-		_show_award_controls()
-		return
+	if game_manager.is_online_game():
+		game_manager.rpc_award_choose_consul.rpc_id(1, player_id)
+	else:
+		if not game_manager.award_choose_next_consul(player_id):
+			_show_award_controls()
+			return
 	_policy_choice_done = true
 	_clear_content()
 	_instruction_label.text = "%s will be Consul next round." % game_manager.get_player_name(player_id)
@@ -281,15 +333,20 @@ func _on_next_consul_target_selected(player_id: int) -> void:
 func _on_influence_choice_selected(faction: int) -> void:
 	if _policy_choice_done:
 		return
-	if not game_manager.award_choose_influence_no_awards(faction):
-		_show_award_controls()
-		return
+	if game_manager.is_online_game():
+		game_manager.rpc_award_choose_influence.rpc_id(1, faction)
+	else:
+		if not game_manager.award_choose_influence_no_awards(faction):
+			_show_award_controls()
+			return
 	_policy_choice_done = true
 	_clear_content()
 	_instruction_label.text = "%s influence increased by +1. No influence awards are triggered." % game_manager.role_name(faction)
 	_continue_button.visible = true
 
 func _show_timed_reveal(text: String) -> void:
+	if game_manager and game_manager.is_online_game() and not game_manager.is_local_player_turn_to_act():
+		return
 	_reveal_timer_active = true
 	_clear_content()
 	_instruction_label.text = text
@@ -297,6 +354,8 @@ func _show_timed_reveal(text: String) -> void:
 	get_tree().create_timer(REVEAL_SECONDS).timeout.connect(_hide_reveal)
 
 func _hide_reveal() -> void:
+	if game_manager and game_manager.is_online_game() and not game_manager.is_local_player_turn_to_act():
+		return
 	if not _reveal_timer_active:
 		return
 	_reveal_timer_active = false
@@ -339,10 +398,13 @@ func _award_title(award_id: int) -> String:
 			return "INFLUENCE AWARD"
 
 func _on_continue_pressed() -> void:
+	if game_manager and game_manager.is_online_game() and not game_manager.is_local_player_turn_to_act():
+		return
 	if game_manager:
-		game_manager.finish_current_award()
-		if game_manager.state.game_phase == "round_end":
-			game_manager.progress()
+		if game_manager.is_online_game():
+			game_manager.rpc_finish_award.rpc_id(1)
+		else:
+			game_manager.finish_current_award()
 	reset_panel()
 
 func _clear_content() -> void:

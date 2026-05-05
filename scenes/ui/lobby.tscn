@@ -1,0 +1,83 @@
+[gd_scene format=3 uid="uid://c84lobbyscene1"]
+
+[ext_resource type="Script" path="res://scripts/network/lobby.gd" id="1"]
+[ext_resource type="Theme" uid="uid://b3kgh7pnmq4rs" path="res://scenes/ui/themes/main_theme.tres" id="2"]
+
+[node name="Lobby" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+theme = ExtResource("2")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+color = Color(0.08, 0.04, 0.04, 1)
+
+[node name="CenterContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="LobbyPanel" type="PanelContainer" parent="CenterContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(560, 0)
+
+[node name="Margin" type="MarginContainer" parent="CenterContainer/LobbyPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 36
+theme_override_constants/margin_top = 32
+theme_override_constants/margin_right = 36
+theme_override_constants/margin_bottom = 32
+
+[node name="VBox" type="VBoxContainer" parent="CenterContainer/LobbyPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 18
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/LobbyPanel/Margin/VBox"]
+layout_mode = 2
+text = "Online Lobby"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 42
+theme_override_colors/font_color = Color(0.9, 0.75, 0.3, 1)
+
+[node name="StatusLabel" type="Label" parent="CenterContainer/LobbyPanel/Margin/VBox"]
+layout_mode = 2
+text = "Waiting..."
+horizontal_alignment = 1
+autowrap_mode = 3
+theme_override_colors/font_color = Color(0.83, 0.77, 0.67, 1)
+
+[node name="PlayerListLabel" type="Label" parent="CenterContainer/LobbyPanel/Margin/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 160)
+text = "No players connected"
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.95, 0.92, 0.85, 1)
+
+[node name="StartButton" type="Button" parent="CenterContainer/LobbyPanel/Margin/VBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 56)
+text = "Start Game (0/6 players)"
+
+[node name="WaitingLabel" type="Label" parent="CenterContainer/LobbyPanel/Margin/VBox"]
+layout_mode = 2
+text = "Waiting for host to start the game..."
+horizontal_alignment = 1
+theme_override_colors/font_color = Color(0.66, 0.58, 0.5, 1)
+
+[node name="BackButton" type="Button" parent="."]
+layout_mode = 1
+offset_left = 20.0
+offset_top = 20.0
+offset_right = 160.0
+offset_bottom = 64.0
+text = "Back to Menu"

@@ -81,7 +81,13 @@ func _process(_delta: float) -> void:
 	if not state or state.game_phase != "spending":
 		return
 
-	var ui_key = "%s|%d|%s|%d|%d|%d|%s|%d" % [
+	var viewer = game_manager.get_policy_viewer_seat()
+	var viewer_conf = ""
+	if viewer >= 0 and viewer < state.spending_confirmed_players.size():
+		viewer_conf = "c" if state.spending_confirmed_players[viewer] else "o"
+	else:
+		viewer_conf = "x"
+	var ui_key = "%s|%d|%s|%d|%d|%d|%s|%d|%d|%s" % [
 		state.spending_stage,
 		state.spending_input_player_index,
 		_draft_option,
@@ -90,6 +96,8 @@ func _process(_delta: float) -> void:
 		state.spending_option_b_total,
 		state.greed_round,
 		state.greed_events_completed,
+		viewer,
+		viewer_conf,
 	]
 	if ui_key == _last_ui_key:
 		return
@@ -149,8 +157,20 @@ func _rebuild_ui(state) -> void:
 				result_a = "won" if state.spending_winner == "A" else "lost"
 				result_b = "won" if state.spending_winner == "B" else "lost"
 		var policy_accent = _policy_accent_color(state.policy_enacted.faction)
-		var card_a = _build_option_card("A", state.policy_enacted.option_a_text, policy_accent, state, result_a)
-		var card_b = _build_option_card("B", state.policy_enacted.option_b_text, policy_accent, state, result_b)
+		var show_card_controls = false
+		var purse_pid = state.spending_input_player_index
+		if state.spending_stage == "input":
+			var vseat = game_manager.get_policy_viewer_seat()
+			var active = state.spending_input_player_index
+			if vseat >= 0 and vseat < state.players.size() and not state.spending_confirmed_players[vseat] and vseat == active:
+				show_card_controls = true
+				purse_pid = vseat
+		var card_a = _build_option_card(
+			"A", state.policy_enacted.option_a_text, policy_accent, state, result_a, show_card_controls, purse_pid
+		)
+		var card_b = _build_option_card(
+			"B", state.policy_enacted.option_b_text, policy_accent, state, result_b, show_card_controls, purse_pid
+		)
 		if state.spending_stage == "resolved":
 			var col_a = _wrap_card_with_tribute(card_a, "A", state)
 			var col_b = _wrap_card_with_tribute(card_b, "B", state)
@@ -170,7 +190,34 @@ func _rebuild_ui(state) -> void:
 
 	match state.spending_stage:
 		"input":
-			_build_input_controls(state)
+			var vseat = game_manager.get_policy_viewer_seat()
+			var active_idx = state.spending_input_player_index
+			if vseat < 0 or vseat >= state.players.size():
+				var claim = Label.new()
+				claim.text = "Claim your seat (Who holds the device?) on the election panel to cast tribute."
+				claim.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				claim.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				claim.add_theme_font_size_override("font_size", 18)
+				claim.add_theme_color_override("font_color", COLOR_CREAM)
+				_controls_box.add_child(claim)
+			elif state.spending_confirmed_players[vseat]:
+				var wait_done = Label.new()
+				wait_done.text = "You have rendered tribute. Other representatives are still deciding."
+				wait_done.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				wait_done.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				wait_done.add_theme_font_size_override("font_size", 18)
+				wait_done.add_theme_color_override("font_color", COLOR_CREAM)
+				_controls_box.add_child(wait_done)
+			elif vseat != active_idx:
+				var wait_turn = Label.new()
+				wait_turn.text = "Another senator is casting tribute. You will be called when it is your turn."
+				wait_turn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				wait_turn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				wait_turn.add_theme_font_size_override("font_size", 18)
+				wait_turn.add_theme_color_override("font_color", COLOR_CREAM)
+				_controls_box.add_child(wait_turn)
+			else:
+				_build_input_controls(state)
 		"handoff":
 			_build_handoff_controls(state)
 		"resolved":
@@ -207,7 +254,15 @@ func _policy_accent_color(faction: int) -> Color:
 		_:
 			return COLOR_GOLD
 
-func _build_option_card(letter: String, text: String, accent: Color, state, result: String = "") -> PanelContainer:
+func _build_option_card(
+	letter: String,
+	text: String,
+	accent: Color,
+	state,
+	result: String = "",
+	show_input_controls: bool = false,
+	purse_player_id: int = 0,
+) -> PanelContainer:
 	var is_winner = result == "won"
 	var is_loser = result == "lost"
 
@@ -260,8 +315,10 @@ func _build_option_card(letter: String, text: String, accent: Color, state, resu
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(body)
 
-	if state.spending_stage == "input":
-		var player_money = game_manager.get_current_spending_player_money()
+	if state.spending_stage == "input" and show_input_controls:
+		var player_money = 0
+		if purse_player_id >= 0 and purse_player_id < state.players.size():
+			player_money = state.players[purse_player_id].money
 		var is_active_option = _draft_option == letter
 		var is_other_locked = _draft_amount > 0 and not is_active_option
 		var shown_amount = _draft_amount if is_active_option else 0
@@ -302,7 +359,7 @@ func _build_option_card(letter: String, text: String, accent: Color, state, resu
 
 	return card
 
-func _build_input_controls(state) -> void:
+func _build_input_controls(_state) -> void:
 	var player_id = game_manager.get_current_spending_player_id()
 	if _draft_player_id != player_id:
 		_draft_player_id = player_id
@@ -335,7 +392,7 @@ func _build_input_controls(state) -> void:
 	hint.add_theme_color_override("font_color", COLOR_DIM)
 	_controls_box.add_child(hint)
 
-func _build_handoff_controls(state) -> void:
+func _build_handoff_controls(_state) -> void:
 	if game_manager and game_manager.advance_spending_turn():
 		_last_ui_key = ""
 
@@ -359,11 +416,29 @@ func _build_resolved_controls(state) -> void:
 		wait.add_theme_color_override("font_color", COLOR_CREAM)
 		_controls_box.add_child(wait)
 
-	var proceed_btn = Button.new()
-	proceed_btn.text = "Proceed"
-	proceed_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	proceed_btn.pressed.connect(_on_resolved_proceed_pressed)
-	_controls_box.add_child(proceed_btn)
+	var wait_lbl = Label.new()
+	wait_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	wait_lbl.add_theme_font_size_override("font_size", 18)
+	wait_lbl.add_theme_color_override("font_color", COLOR_CREAM)
+	_controls_box.add_child(wait_lbl)
+	_run_resolved_countdown_to_results(wait_lbl)
+
+func _resolved_countdown_seconds_word(n: int) -> String:
+	return "second" if n == 1 else "seconds"
+
+func _run_resolved_countdown_to_results(label: Label) -> void:
+	var total: int = int(roundf(GameManager.SPENDING_RESOLVED_TO_RESULT_SEC))
+	total = maxi(1, total)
+	for i in range(total, 0, -1):
+		if not is_instance_valid(self) or not is_instance_valid(label):
+			return
+		if not game_manager or not game_manager.state:
+			return
+		if game_manager.state.game_phase != "spending" or game_manager.state.spending_stage != "resolved":
+			return
+		label.text = "Proceeding to results in %d %s…" % [i, _resolved_countdown_seconds_word(i)]
+		if i > 1:
+			await get_tree().create_timer(1.0).timeout
 
 func _on_option_minus_pressed(option_key: String) -> void:
 	if _draft_option != option_key or _draft_amount <= 0:
@@ -382,15 +457,14 @@ func _on_option_plus_pressed(option_key: String, max_money: int) -> void:
 	_last_ui_key = ""
 
 func _on_pay_pressed() -> void:
-	game_manager.set_spending_allocation(_draft_option, _draft_amount)
+	if game_manager.is_online_game():
+		game_manager.rpc_set_spending.rpc_id(1, _draft_option, _draft_amount)
+	else:
+		game_manager.set_spending_allocation(_draft_option, _draft_amount)
 	_last_ui_key = ""
 
 func _on_pass_pressed() -> void:
 	game_manager.advance_spending_turn()
-	_last_ui_key = ""
-
-func _on_resolved_proceed_pressed() -> void:
-	game_manager.progress()
 	_last_ui_key = ""
 
 func _show_dual_veto_immediate(card_a: PanelContainer, card_b: PanelContainer) -> void:

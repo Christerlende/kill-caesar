@@ -18,6 +18,7 @@ const COLOR_ASH = Color(0.55, 0.12, 0.1, 0.95)
 
 const FADE_DELAY: float = 0.85
 const FADE_DURATION: float = 0.9
+const AUTO_ADVANCE_AFTER_FINAL_SEC: float = 5.0
 
 const INTRO_LINES: Array = [
 	"The senate's inaction creates unrest in all of Rome.",
@@ -36,10 +37,10 @@ var game_manager = null
 
 var _root: VBoxContainer
 var _content: VBoxContainer
-var _continue_btn: Button
 var _tween: Tween = null
 var _sequence_started: bool = false
 var _last_phase_key: String = ""
+var _advance_generation: int = 0
 
 func _ready() -> void:
 	clip_contents = true
@@ -69,20 +70,13 @@ func _ready() -> void:
 	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_root.add_child(_content)
 
-	_continue_btn = Button.new()
-	_continue_btn.text = "Continue"
-	_continue_btn.visible = false
-	_continue_btn.pressed.connect(_on_continue_pressed)
-	_continue_btn.add_theme_color_override("font_color", COLOR_CREAM)
-	_root.add_child(_continue_btn)
-
 func reset_panel() -> void:
+	_advance_generation += 1
 	if _tween:
 		_tween.kill()
 		_tween = null
 	_sequence_started = false
 	_last_phase_key = ""
-	_continue_btn.visible = false
 	for c in _content.get_children():
 		c.queue_free()
 
@@ -117,10 +111,10 @@ func _add_line(text: String, font_sz: int, color: Color) -> Label:
 	return l
 
 func _start_sequence(state) -> void:
+	_advance_generation += 1
 	_sequence_started = true
 	for c in _content.get_children():
 		c.queue_free()
-	_continue_btn.visible = false
 
 	var intro = INTRO_LINES[randi() % INTRO_LINES.size()]
 	var pid = state.last_greed_punishment_id
@@ -142,22 +136,31 @@ func _start_sequence(state) -> void:
 		if item.apply:
 			_tween.tween_callback(_apply_punishment.bind(pid))
 	_tween.tween_interval(FADE_DELAY)
-	_tween.tween_callback(_show_continue)
+	_tween.tween_callback(_schedule_auto_advance)
 
 func _apply_punishment(punishment_id: int) -> void:
 	if game_manager:
 		game_manager.apply_greed_punishment(punishment_id)
 
-func _show_continue() -> void:
-	_continue_btn.visible = true
-	_continue_btn.modulate = Color(1, 1, 1, 0)
-	var bt = create_tween()
-	bt.tween_property(_continue_btn, "modulate:a", 1.0, 0.45)
-
-func _on_continue_pressed() -> void:
-	if game_manager:
-		game_manager.finish_greed_sequence()
-	reset_panel()
+func _schedule_auto_advance() -> void:
+	var gen_at_schedule = _advance_generation
+	if not is_inside_tree():
+		return
+	get_tree().create_timer(AUTO_ADVANCE_AFTER_FINAL_SEC).timeout.connect(func():
+		if gen_at_schedule != _advance_generation:
+			return
+		if not game_manager or not game_manager.state:
+			return
+		if game_manager.state.game_phase != "greed":
+			return
+		if game_manager.is_online_game() and not game_manager.is_session_authority():
+			return
+		if game_manager.is_online_game():
+			game_manager.rpc_progress.rpc_id(1)
+		else:
+			game_manager.progress()
+		reset_panel()
+	, CONNECT_ONE_SHOT)
 
 func _punishment_sequence(pid: int) -> Array:
 	var out: Array = []

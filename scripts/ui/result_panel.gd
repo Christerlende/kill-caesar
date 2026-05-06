@@ -31,6 +31,8 @@ var _threat_item: Label = null
 var _deadlock_item: Label = null
 var _viewing_player_id: int = -1
 var _fade_tween: Tween = null
+var _result_auto_advance_secs: float = -1.0
+const RESULT_AUTO_CONTINUE_SEC: float = 7.0
 
 func _ready() -> void:
 	clip_contents = true
@@ -113,6 +115,12 @@ func _ready() -> void:
 	root_vbox.add_child(btn_container)
 
 func _process(_delta: float) -> void:
+	if game_manager and game_manager.state and game_manager.state.game_phase == "result":
+		if _result_auto_advance_secs > 0.0:
+			_result_auto_advance_secs = max(_result_auto_advance_secs - _delta, 0.0)
+			if _result_auto_advance_secs <= 0.0:
+				_result_auto_advance_secs = -1.0
+				_on_continue_pressed()
 	if not game_manager:
 		return
 	var state = game_manager.state
@@ -142,6 +150,7 @@ func reset_panel() -> void:
 	_threat_item = null
 	_deadlock_item = null
 	_continue_button.visible = false
+	_result_auto_advance_secs = -1.0
 	for child in _history_list.get_children():
 		child.queue_free()
 	for child in _right_box.get_children():
@@ -161,6 +170,7 @@ func set_viewing_player(player_id: int) -> void:
 	_last_ui_key = ""
 	_animation_started = false
 	_continue_button.visible = false
+	_result_auto_advance_secs = -1.0
 	_influence_item = null
 	_decree_item = null
 	_threat_item = null
@@ -225,6 +235,8 @@ func _start_fade_in_sequence(state) -> void:
 			_decree_item.modulate = Color(1, 1, 1, 0)
 			_right_box.add_child(_decree_item)
 			items.append({"node": _decree_item, "kind": "decree"})
+		else:
+			_decree_item = null
 	else:
 		_decree_item = null
 	if state.deadlock_round:
@@ -367,7 +379,22 @@ func _deadlock_effect_result_text(effect_id: int) -> String:
 		_:
 			return "The deadlock sends ripples of fear through the senate."
 
+func _ensure_decree_applied_if_needed() -> void:
+	if _decree_applied:
+		return
+	if not game_manager or not game_manager.state:
+		return
+	var st = game_manager.state
+	if st.greed_round or st.deadlock_round or st.policy_enacted == null:
+		return
+	if st.game_phase == "game_over":
+		return
+	_decree_applied = true
+	game_manager.apply_enacted_decree_effect(st.policy_enacted, st.spending_winner)
+
+
 func _show_continue_button() -> void:
+	_ensure_decree_applied_if_needed()
 	if _is_game_over():
 		# Auto-transition to victory screen after a short pause
 		var game_over_tween = create_tween()
@@ -378,6 +405,7 @@ func _show_continue_button() -> void:
 	_continue_button.modulate = Color(1, 1, 1, 0)
 	var button_tween = create_tween()
 	button_tween.tween_property(_continue_button, "modulate:a", 1.0, 0.5).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	_result_auto_advance_secs = RESULT_AUTO_CONTINUE_SEC
 
 func _go_to_victory_screen() -> void:
 	get_tree().change_scene_to_file("res://scenes/ui/end_game.tscn")
@@ -474,6 +502,7 @@ func _rebuild_history(state) -> void:
 		_history_list.add_child(HSeparator.new())
 
 func _on_continue_pressed() -> void:
+	_result_auto_advance_secs = -1.0
 	if game_manager:
 		if game_manager.is_online_game():
 			game_manager.rpc_progress.rpc_id(1)

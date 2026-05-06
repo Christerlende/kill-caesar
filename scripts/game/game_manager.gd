@@ -214,7 +214,9 @@ func auto_fill_ai_election_votes() -> void:
 func auto_run_ai_spending_inputs() -> void:
 	if state.game_phase != "spending":
 		return
-	while true:
+	var guard = 0
+	while guard < 48:
+		guard += 1
 		if state.spending_stage == "resolved":
 			return
 		if state.spending_stage == "handoff":
@@ -223,13 +225,22 @@ func auto_run_ai_spending_inputs() -> void:
 			continue
 		if state.spending_stage != "input":
 			return
-		var player_id = state.spending_input_player_index
-		if player_id < 0 or player_id >= state.players.size():
+		var progressed := false
+		for player_id in range(state.players.size()):
+			if state.spending_confirmed_players[player_id]:
+				continue
+			if state.players[player_id].is_dead or _is_player_spending_locked(player_id):
+				continue
+			if not state.players[player_id].is_ai:
+				return
+			## Skip tribute: keep gold; human retains full control of the treasury vote.
+			if set_spending_allocation_for_player(player_id, "A", 0):
+				progressed = true
+				if is_online_game() and _is_authority() and state.spending_stage == "input":
+					broadcast_state()
+			break
+		if not progressed:
 			return
-		if not state.players[player_id].is_ai:
-			return
-		## Skip tribute: keep gold; human retains full control of the treasury vote.
-		set_spending_allocation("A", 0)
 
 # Election: consul nominates and players vote
 # Policy: consul/co-consul discard, apply influence, run money vote
@@ -745,38 +756,50 @@ func start_spending_phase() -> void:
 		state.spending_private_inputs.append({"option": "A", "amount": 0})
 		# Dead and policy-locked players are auto-confirmed and skipped.
 		state.spending_confirmed_players.append(state.players[i].is_dead or _is_player_spending_locked(i))
-	# Find first alive player to input
-	state.spending_input_player_index = 0
-	while state.spending_input_player_index < state.players.size() and state.spending_confirmed_players[state.spending_input_player_index]:
-		state.spending_input_player_index += 1
-	if state.spending_input_player_index >= state.players.size():
-		resolve_spending_totals()
-		return
+	state.spending_input_player_index = -1
 	state.spending_stage = "input"
-	print("Spending phase started. Waiting for Player %d private input." % state.spending_input_player_index)
+	var pending_humans = 0
+	for i in range(state.players.size()):
+		if state.spending_confirmed_players[i]:
+			continue
+		if state.players[i].is_dead or _is_player_spending_locked(i):
+			continue
+		if not state.players[i].is_ai:
+			pending_humans += 1
+	print(
+		"Spending phase started. Simultaneous tribute (%d human(s) still owe)." % pending_humans
+	)
 	if _is_authority():
 		auto_run_ai_spending_inputs()
+	if is_online_game() and _is_authority():
+		broadcast_state()
 
 func get_current_spending_player_id() -> int:
-	return state.spending_input_player_index
+	if state.game_phase != "spending" or state.spending_stage != "input":
+		if state.spending_input_player_index >= 0 and state.spending_input_player_index < state.players.size():
+			return state.spending_input_player_index
+		return 0
+	return get_policy_viewer_seat()
 
 func get_current_spending_player_money() -> int:
-	if state.spending_input_player_index < 0 or state.spending_input_player_index >= state.players.size():
+	var pid := get_current_spending_player_id()
+	if pid < 0 or pid >= state.players.size():
 		return 0
-	return state.players[state.spending_input_player_index].money
+	return state.players[pid].money
 
 func _is_player_spending_locked(player_id: int) -> bool:
 	return state.policy_spending_locked_player_ids.has(player_id)
 
-func set_spending_allocation(option_key: String, spend_amount: int) -> bool:
+func set_spending_allocation_for_player(player_id: int, option_key: String, spend_amount: int) -> bool:
 	if state.game_phase != "spending" or state.spending_stage != "input":
 		return false
-	var player_id = state.spending_input_player_index
 	if player_id < 0 or player_id >= state.players.size():
 		return false
 	if state.players[player_id].is_dead:
 		return false
 	if _is_player_spending_locked(player_id):
+		return false
+	if state.spending_confirmed_players[player_id]:
 		return false
 	if option_key != "A" and option_key != "B":
 		return false
@@ -785,17 +808,25 @@ func set_spending_allocation(option_key: String, spend_amount: int) -> bool:
 		return false
 	state.spending_private_inputs[player_id] = {"option": option_key, "amount": spend_amount}
 	state.spending_confirmed_players[player_id] = true
-	# Auto-advance to the next player (or resolve totals) to avoid extra handoff clicks.
-	var next_player = state.spending_input_player_index + 1
-	while next_player < state.players.size() and state.spending_confirmed_players[next_player]:
-		next_player += 1
-	if next_player >= state.players.size():
-		resolve_spending_totals()
-	else:
-		state.spending_input_player_index = next_player
-		state.spending_stage = "input"
 	print("Player %d spending captured privately." % player_id)
-	if _is_authority():
+	var all_done := true
+	for i in range(state.players.size()):
+		if not state.spending_confirmed_players[i]:
+			all_done = false
+			break
+	if all_done:
+		resolve_spending_totals()
+	return true
+
+
+func set_spending_allocation(option_key: String, spend_amount: int) -> bool:
+	## Offline / hotseat: attribute spending to whoever holds the policy viewer seat.
+	var seat := get_policy_viewer_seat()
+	if seat < 0 or seat >= state.players.size():
+		return false
+	if not set_spending_allocation_for_player(seat, option_key, spend_amount):
+		return false
+	if _is_authority() and state.spending_stage == "input":
 		auto_run_ai_spending_inputs()
 	return true
 
@@ -843,6 +874,8 @@ func resolve_spending_totals() -> void:
 			_trigger_rome_collapse()
 			state.spending_winner = ""
 			state.spending_stage = "resolved"
+			if is_online_game() and _is_authority():
+				broadcast_state()
 			return
 		state.greed_round = true
 		state.spending_winner = ""
@@ -860,11 +893,15 @@ func resolve_spending_totals() -> void:
 	state.policy_spending_locked_player_ids.clear()
 	if state.greed_round:
 		_schedule_enter_greed_after_delay()
+		if is_online_game() and _is_authority():
+			broadcast_state()
 		return
 	if _is_authority() and is_inside_tree():
 		get_tree().create_timer(SPENDING_RESOLVED_TO_RESULT_SEC).timeout.connect(
 			_on_spending_resolved_to_result_timeout, CONNECT_ONE_SHOT
 		)
+	if is_online_game() and _is_authority():
+		broadcast_state()
 
 func _on_spending_resolved_to_result_timeout() -> void:
 	if not _is_authority():
@@ -1971,7 +2008,13 @@ func is_local_player_turn_to_act() -> bool:
 			return false
 		"spending":
 			if state.spending_stage == "input":
-				return seat == state.spending_input_player_index
+				if seat < 0 or seat >= state.players.size():
+					return false
+				if state.spending_confirmed_players[seat]:
+					return false
+				if state.players[seat].is_dead:
+					return false
+				return not _is_player_spending_locked(seat)
 			return false
 		"award":
 			return seat == state.current_consul_index
@@ -2282,11 +2325,16 @@ func rpc_set_spending(option_key: String, spend_amount: int) -> void:
 	if not _is_authority():
 		return
 	var seat: int = _authority_seat_for_rpc_sender()
-	if state.spending_stage != "input" or seat != state.spending_input_player_index:
+	if state.spending_stage != "input" or seat < 0 or seat >= state.players.size():
 		return
-	if not set_spending_allocation(option_key, spend_amount):
+	if state.spending_confirmed_players[seat] or state.players[seat].is_dead or _is_player_spending_locked(seat):
 		return
-	broadcast_state()
+	if not set_spending_allocation_for_player(seat, option_key, spend_amount):
+		return
+	if is_online_game() and _is_authority() and state.game_phase == "spending" and state.spending_stage == "input":
+		broadcast_state()
+	if state.spending_stage == "input":
+		auto_run_ai_spending_inputs()
 
 @rpc("any_peer", "reliable", "call_local")
 func rpc_progress() -> void:

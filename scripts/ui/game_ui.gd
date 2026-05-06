@@ -797,7 +797,13 @@ func _int_list_signature(values: Array) -> String:
 func _update_spending_controls(state) -> void:
 	if not spending_controls_container:
 		return
-	var ui_key = "%s|%s|%d|%s|%d" % [state.game_phase, state.spending_stage, state.spending_input_player_index, _spend_selected_option, _spend_amount_draft]
+	var ui_key = "%s|%s|%d|%s|%d" % [
+		state.game_phase,
+		state.spending_stage,
+		game_manager.get_policy_viewer_seat(),
+		_spend_selected_option,
+		_spend_amount_draft,
+	]
 	if ui_key == _spending_ui_key:
 		return
 	_spending_ui_key = ui_key
@@ -807,6 +813,12 @@ func _update_spending_controls(state) -> void:
 		return
 	if state.spending_stage == "input":
 		var player_id = game_manager.get_current_spending_player_id()
+		if player_id < 0 or player_id >= state.players.size():
+			var claim = Label.new()
+			claim.text = "Claim your seat (election panel) to render tribute from this sidebar."
+			claim.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			spending_controls_container.add_child(claim)
+			return
 		var money = game_manager.get_current_spending_player_money()
 		if _spend_player_id_draft != player_id:
 			_spend_player_id_draft = player_id
@@ -962,15 +974,12 @@ func _build_actor_prompt_text(state) -> String:
 		"spending":
 			if state.spending_stage == "input":
 				var vs: int = game_manager.get_policy_viewer_seat()
-				var active_sp: int = state.spending_input_player_index
 				if vs < 0 or vs >= state.players.size():
 					actor_text += "Private tribute — claim your seat to participate"
 				elif vs < state.spending_confirmed_players.size() and state.spending_confirmed_players[vs]:
 					actor_text += "You have rendered tribute — waiting on others"
-				elif vs == active_sp:
-					actor_text += "Cast your private treasury vote"
 				else:
-					actor_text += "Waiting for other representatives to cast tribute"
+					actor_text += "Cast your private treasury vote"
 			elif state.spending_stage == "handoff":
 				actor_text += "Pass to next player"
 			elif state.spending_stage == "resolved":
@@ -1042,15 +1051,12 @@ func _build_phase_text(state) -> String:
 	if state.game_phase == "spending" and state.spending_stage == "input":
 		lines.append("")
 		var vph: int = game_manager.get_policy_viewer_seat()
-		var act_p: int = state.spending_input_player_index
 		if vph < 0 or vph >= state.players.size():
 			lines.append("Private tribute: claim your seat to see your status.")
 		elif vph < state.spending_confirmed_players.size() and state.spending_confirmed_players[vph]:
 			lines.append("You have rendered tribute. Waiting on other representatives.")
-		elif vph == act_p:
-			lines.append("Cast your treasury vote on one decree (main panel).")
 		else:
-			lines.append("Other representatives are casting tribute before you.")
+			lines.append("Cast your treasury vote on one decree (main panel).")
 	elif state.game_phase == "spending" and state.spending_stage == "handoff":
 		lines.append("")
 		lines.append("Pass device to next player")

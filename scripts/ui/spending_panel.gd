@@ -134,6 +134,10 @@ func _rebuild_ui(state) -> void:
 	for child in _controls_box.get_children():
 		child.queue_free()
 
+	var vseat: int = -1
+	if game_manager:
+		vseat = game_manager.get_policy_viewer_seat()
+
 	if state.policy_enacted != null:
 		if state.spending_stage == "resolved":
 			if state.greed_round:
@@ -158,13 +162,16 @@ func _rebuild_ui(state) -> void:
 				result_b = "won" if state.spending_winner == "B" else "lost"
 		var policy_accent = _policy_accent_color(state.policy_enacted.faction)
 		var show_card_controls = false
-		var purse_pid = state.spending_input_player_index
+		var purse_pid = vseat if vseat >= 0 else 0
 		if state.spending_stage == "input":
-			var vseat = game_manager.get_policy_viewer_seat()
-			var active = state.spending_input_player_index
-			if vseat >= 0 and vseat < state.players.size() and not state.spending_confirmed_players[vseat] and vseat == active:
-				show_card_controls = true
-				purse_pid = vseat
+			if vseat >= 0 and vseat < state.players.size():
+				if (
+					not state.spending_confirmed_players[vseat]
+					and not state.players[vseat].is_dead
+					and not state.policy_spending_locked_player_ids.has(vseat)
+				):
+					show_card_controls = true
+					purse_pid = vseat
 		var card_a = _build_option_card(
 			"A", state.policy_enacted.option_a_text, policy_accent, state, result_a, show_card_controls, purse_pid
 		)
@@ -190,8 +197,6 @@ func _rebuild_ui(state) -> void:
 
 	match state.spending_stage:
 		"input":
-			var vseat = game_manager.get_policy_viewer_seat()
-			var active_idx = state.spending_input_player_index
 			if vseat < 0 or vseat >= state.players.size():
 				var claim = Label.new()
 				claim.text = "Claim your seat (Who holds the device?) on the election panel to cast tribute."
@@ -200,7 +205,9 @@ func _rebuild_ui(state) -> void:
 				claim.add_theme_font_size_override("font_size", 18)
 				claim.add_theme_color_override("font_color", COLOR_CREAM)
 				_controls_box.add_child(claim)
-			elif state.spending_confirmed_players[vseat]:
+			elif not state.spending_confirmed_players[vseat]:
+				_build_input_controls(state)
+			else:
 				var wait_done = Label.new()
 				wait_done.text = "You have rendered tribute. Other representatives are still deciding."
 				wait_done.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -208,16 +215,6 @@ func _rebuild_ui(state) -> void:
 				wait_done.add_theme_font_size_override("font_size", 18)
 				wait_done.add_theme_color_override("font_color", COLOR_CREAM)
 				_controls_box.add_child(wait_done)
-			elif vseat != active_idx:
-				var wait_turn = Label.new()
-				wait_turn.text = "Another senator is casting tribute. You will be called when it is your turn."
-				wait_turn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-				wait_turn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-				wait_turn.add_theme_font_size_override("font_size", 18)
-				wait_turn.add_theme_color_override("font_color", COLOR_CREAM)
-				_controls_box.add_child(wait_turn)
-			else:
-				_build_input_controls(state)
 		"handoff":
 			_build_handoff_controls(state)
 		"resolved":

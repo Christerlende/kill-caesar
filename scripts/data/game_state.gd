@@ -27,7 +27,18 @@ var policy_spending_locked_player_ids: Array = []
 var forced_next_consul_index: int = -1
 var double_next_policy_gold_active: bool = false
 var double_next_policy_influence_active: bool = false
+## Round number (matches `round_number` during that round) when living Caesar cannot vote or spend. -1 = inactive.
+var caesar_political_silence_round: int = -1
+## Passive income: Plebeians gain this much extra gold per round while rounds_remaining > 0 (see distribute_money).
+var plebeian_bonus_income_per_round: int = 0
+var plebeian_bonus_income_rounds_remaining: int = 0
 var income_block_rounds_by_player: Dictionary = {}
+
+## Policy 28 — skip consul rotation once and skip next election; restore co-consul seat in start_round.
+var retain_consul_pair_next_turnover: bool = false
+var pending_restore_co_consul_seat: int = -1
+## When true, progress() jumps from round_start to policy (after start_round restored co-consul).
+var skip_election_this_round: bool = false
 
 # Phase result data for UI display
 # Election results

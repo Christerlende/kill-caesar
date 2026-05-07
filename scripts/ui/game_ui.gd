@@ -748,6 +748,11 @@ func _update_election_vote_buttons(state) -> void:
 		elif vote_state == 0:
 			vote_text = "NO"
 		var label = Label.new()
+		if not state.players[player_id].is_dead and not game_manager.is_player_election_vote_required(player_id):
+			label.text = "%s vote: Silenced (cannot vote this round)" % _player_name(player_id)
+			row.add_child(label)
+			election_votes_container.add_child(row)
+			continue
 		label.text = "%s vote: %s" % [_player_name(player_id), vote_text]
 		var yes_button = Button.new()
 		yes_button.text = "Yes"

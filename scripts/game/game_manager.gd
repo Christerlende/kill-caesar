@@ -58,6 +58,7 @@ const AWARD_PATRICIAN_6_EXECUTION: int = 5
 const AWARD_POLICY_5_SPENDING_LOCK: int = 6
 const AWARD_POLICY_7_NEXT_CONSUL: int = 7
 const AWARD_POLICY_11_INFLUENCE_CHOICE: int = 8
+const AWARD_POLICY_22_PATRICIAN_TRIAL: int = 9
 const AWARD_THRESHOLDS: Array = [2, 4, 6]
 
 ## Synced Continue bar (host). Kind stored in GameState.continue_gate_kind.
@@ -130,12 +131,23 @@ static func queue_player_names(names: Array) -> void:
 	queued_player_names = names.duplicate()
 
 func _required_yes_votes() -> int:
-	# Simple majority of living players: floor(n/2) + 1
+	# Simple majority of players who must cast a ballot this election.
 	var living_players = 0
-	for player in state.players:
-		if not player.is_dead:
+	for i in range(state.players.size()):
+		if is_player_election_vote_required(i):
 			living_players += 1
 	return int(floor(living_players / 2.0)) + 1
+
+
+func is_player_election_vote_required(player_id: int) -> bool:
+	if player_id < 0 or player_id >= state.players.size():
+		return false
+	if state.players[player_id].is_dead:
+		return false
+	if state.caesar_political_silence_round >= 0 and state.round_number == state.caesar_political_silence_round:
+		if state.players[player_id].role == Role.CAESAR:
+			return false
+	return true
 
 func _find_next_living_player(start_index: int) -> int:
 	if state.players.is_empty():
@@ -196,6 +208,8 @@ func auto_fill_ai_election_votes() -> void:
 				continue
 			if not state.players[player_id].is_ai:
 				continue
+			if not is_player_election_vote_required(player_id):
+				continue
 			set_election_vote(player_id, true)
 		return
 	var yes_count = 0
@@ -207,9 +221,11 @@ func auto_fill_ai_election_votes() -> void:
 			continue
 		if not state.players[player_id].is_ai:
 			continue
+		if not is_player_election_vote_required(player_id):
+			continue
 		var remaining_ai_unset = 0
 		for j in range(player_id + 1, state.players.size()):
-			if state.election_vote_inputs[j] == -1 and state.players[j].is_ai:
+			if state.election_vote_inputs[j] == -1 and state.players[j].is_ai and is_player_election_vote_required(j):
 				remaining_ai_unset += 1
 		var needed_yes = _required_yes_votes() - yes_count
 		var must_vote_yes = needed_yes > 0 and needed_yes >= (remaining_ai_unset + 1)
@@ -289,6 +305,12 @@ func create_players():
 	_influence_snapshot_patrician_for_decree = 0
 	_influence_snapshot_plebian_for_decree = 0
 	state.auto_election_award_active = false
+	state.caesar_political_silence_round = -1
+	state.plebeian_bonus_income_per_round = 0
+	state.plebeian_bonus_income_rounds_remaining = 0
+	state.retain_consul_pair_next_turnover = false
+	state.pending_restore_co_consul_seat = -1
+	state.skip_election_this_round = false
 	state.players.clear()
 	for i in range(6):
 		var p = Player.new()
@@ -365,6 +387,19 @@ func start_round():
 		p.is_consul = false
 		p.is_co_consul = false
 	state.players[state.current_consul_index].is_consul = true
+	if state.pending_restore_co_consul_seat >= 0:
+		var rs = state.pending_restore_co_consul_seat
+		state.pending_restore_co_consul_seat = -1
+		if (
+			rs < state.players.size()
+			and not state.players[rs].is_dead
+			and rs != state.current_consul_index
+		):
+			state.current_co_consul_index = rs
+			state.players[rs].is_co_consul = true
+			state.ineligible_co_consul_indices = [state.current_consul_index, rs]
+		else:
+			state.skip_election_this_round = false
 	# clear phase results
 	state.election_nominee_index = -1
 	state.election_votes_yes.clear()
@@ -440,15 +475,19 @@ func get_greed_chaos_slot_count() -> int:
 func distribute_money():
 	for i in range(state.players.size()):
 		var p = state.players[i]
-		# Dead players don't earn gold
 		if p.is_dead:
 			continue
-		if _consume_income_block_for_player(i):
-			continue
-		var base_income = _base_income_for_role(p.role)
-		var tax_due = _calculate_income_tax(p.money, base_income)
-		var net_income = max(base_income - tax_due, 0)
-		p.money += net_income
+		if not _consume_income_block_for_player(i):
+			var base_income = _base_income_for_role(p.role)
+			var tax_due = _calculate_income_tax(p.money, base_income)
+			var net_income = max(base_income - tax_due, 0)
+			p.money += net_income
+		if p.role == Role.PLEBIAN and state.plebeian_bonus_income_rounds_remaining > 0 and state.plebeian_bonus_income_per_round > 0:
+			p.money += state.plebeian_bonus_income_per_round
+	if state.plebeian_bonus_income_rounds_remaining > 0 and state.plebeian_bonus_income_per_round > 0:
+		state.plebeian_bonus_income_rounds_remaining -= 1
+		if state.plebeian_bonus_income_rounds_remaining <= 0:
+			state.plebeian_bonus_income_per_round = 0
 
 func _consume_income_block_for_player(player_id: int) -> bool:
 	var rounds_left = int(state.income_block_rounds_by_player.get(player_id, 0))
@@ -469,16 +508,26 @@ func print_current_consul():
 	print("Current phase: %s" % state.game_phase)
 
 func next_consul():
-	var next_index = -1
-	if state.forced_next_consul_index >= 0 and state.forced_next_consul_index < state.players.size():
-		if not state.players[state.forced_next_consul_index].is_dead:
-			next_index = state.forced_next_consul_index
-	state.forced_next_consul_index = -1
-	if next_index < 0:
-		next_index = _find_next_living_player(state.current_consul_index + 1)
-	if next_index >= 0:
-		state.current_consul_index = next_index
-	# update runtime flags
+	if state.retain_consul_pair_next_turnover:
+		state.retain_consul_pair_next_turnover = false
+		state.forced_next_consul_index = -1
+		var ci = state.current_consul_index
+		if ci < 0 or ci >= state.players.size() or state.players[ci].is_dead:
+			var fixed_ci = _find_next_living_player(0)
+			if fixed_ci >= 0:
+				state.current_consul_index = fixed_ci
+			state.pending_restore_co_consul_seat = -1
+			state.skip_election_this_round = false
+	else:
+		var next_index = -1
+		if state.forced_next_consul_index >= 0 and state.forced_next_consul_index < state.players.size():
+			if not state.players[state.forced_next_consul_index].is_dead:
+				next_index = state.forced_next_consul_index
+		state.forced_next_consul_index = -1
+		if next_index < 0:
+			next_index = _find_next_living_player(state.current_consul_index + 1)
+		if next_index >= 0:
+			state.current_consul_index = next_index
 	for p in state.players:
 		p.is_consul = false
 		p.is_co_consul = false
@@ -524,9 +573,14 @@ func select_election_nominee(nominee_index: int) -> bool:
 		state.election_votes_yes.clear()
 		state.election_votes_no.clear()
 		for i in range(state.election_vote_inputs.size()):
-			state.election_vote_inputs[i] = 0 if state.players[i].is_dead else 1
-			if not state.players[i].is_dead:
-				state.election_votes_yes.append(i)
+			if state.players[i].is_dead:
+				state.election_vote_inputs[i] = 0
+				continue
+			if not is_player_election_vote_required(i):
+				state.election_vote_inputs[i] = -1
+				continue
+			state.election_vote_inputs[i] = 1
+			state.election_votes_yes.append(i)
 		_complete_successful_election(nominee_index)
 		print("Plebeian influence award: nominee auto-elected as co-consul.")
 		if _is_authority():
@@ -543,6 +597,8 @@ func set_election_vote(player_id: int, is_yes: bool) -> bool:
 	if state.players[player_id].is_dead:
 		print("Dead player %d cannot vote" % (player_id + 1))
 		return false
+	if not is_player_election_vote_required(player_id):
+		return false
 	state.election_vote_inputs[player_id] = 1 if is_yes else 0
 	return true
 
@@ -550,7 +606,7 @@ func are_election_votes_complete() -> bool:
 	if state.election_vote_inputs.size() != state.players.size():
 		return false
 	for i in range(state.election_vote_inputs.size()):
-		if state.players[i].is_dead:
+		if not is_player_election_vote_required(i):
 			continue
 		if state.election_vote_inputs[i] == -1:
 			return false
@@ -561,7 +617,9 @@ func are_human_player_election_votes_complete() -> bool:
 	if state.election_vote_inputs.size() != state.players.size():
 		return false
 	for i in range(state.election_vote_inputs.size()):
-		if state.players[i].is_dead or state.players[i].is_ai:
+		if state.players[i].is_ai:
+			continue
+		if not is_player_election_vote_required(i):
 			continue
 		if state.election_vote_inputs[i] == -1:
 			return false
@@ -582,6 +640,8 @@ func conduct_election() -> bool:
 		return false
 	for player_id in range(state.election_vote_inputs.size()):
 		if state.players[player_id].is_dead:
+			continue
+		if not is_player_election_vote_required(player_id):
 			continue
 		if state.election_vote_inputs[player_id] == 1:
 			state.election_votes_yes.append(player_id)
@@ -785,7 +845,16 @@ func get_current_spending_player_money() -> int:
 	return state.players[pid].money
 
 func _is_player_spending_locked(player_id: int) -> bool:
-	return state.policy_spending_locked_player_ids.has(player_id)
+	if state.policy_spending_locked_player_ids.has(player_id):
+		return true
+	if player_id < 0 or player_id >= state.players.size():
+		return false
+	var pl = state.players[player_id]
+	if pl.is_dead:
+		return false
+	if pl.role == Role.CAESAR and state.caesar_political_silence_round >= 0 and state.round_number == state.caesar_political_silence_round:
+		return true
+	return false
 
 func set_spending_allocation_for_player(player_id: int, option_key: String, spend_amount: int) -> bool:
 	if state.game_phase != "spending" or state.spending_stage != "input":
@@ -1233,6 +1302,33 @@ func _apply_effect(effect_type: String, params: Dictionary) -> void:
 			_gold_to_current_consul(int(params.get("amount", 0)))
 		"grant_assassination_token_to_current_consul":
 			_grant_assassination_token_to_current_consul()
+		"grant_assassination_token_to_current_co_consul":
+			_grant_assassination_token_to_current_co_consul()
+		"queue_patrician_trial_consul_pick":
+			_queue_patrician_trial_consul_pick()
+		"gold_to_random_player_of_role":
+			var g_role = Policy.role_from_string(str(params.get("role", "plebeian")))
+			_gold_to_random_player_of_role(g_role, int(params.get("amount", 0)))
+		"set_caesar_political_silence_next_round":
+			_set_caesar_political_silence_next_round()
+		"transfer_all_gold_random_to_caesar":
+			_transfer_all_gold_random_non_caesar_to_caesar()
+		"grant_assassination_tokens_all_living_lose_gold":
+			_grant_assassination_tokens_all_living_and_lose_gold(int(params.get("gold_loss", 0)))
+		"set_plebeian_passive_income_bonus":
+			_set_plebeian_passive_income_bonus(int(params.get("amount", 0)), int(params.get("rounds", 0)))
+		"grant_two_distinct_assassination_tokens_plebeian":
+			_grant_two_distinct_random_assassination_tokens_for_role(Role.PLEBIAN)
+		"grant_one_assassination_counter_random_patrician_or_caesar":
+			_grant_one_assassination_counter_random_patrician_or_caesar()
+		"remove_all_assassination_counters_on_living_players":
+			_remove_all_assassination_counters_on_living_players()
+		"retain_consul_pair_next_turnover":
+			_apply_retain_consul_pair_next_turnover()
+		"gold_to_current_co_consul":
+			_gold_to_current_co_consul(int(params.get("amount", 0)))
+		"redistribute_all_gold_evenly_among_living":
+			_redistribute_all_gold_evenly_among_living()
 		"highest_influence_gain_or_all_lose_gold":
 			_highest_influence_gain_or_all_lose_gold(int(params.get("amount", 1)), int(params.get("gold_loss", 0)))
 		"lowest_influence_gain_or_all_gain_counters":
@@ -1357,6 +1453,242 @@ func _grant_assassination_token_to_current_consul() -> void:
 		print("Consul Player %d gained an assassination token." % (consul_id + 1))
 	else:
 		print("Consul cannot receive another assassination token.")
+
+
+func _grant_assassination_token_to_current_co_consul() -> void:
+	var cc = state.current_co_consul_index
+	if cc < 0 or cc >= state.players.size():
+		print("No co-consul seated; cannot grant assassination token.")
+		return
+	if _grant_assassination_token_to_player_id(cc):
+		print("Co-consul Player %d gained an assassination token." % (cc + 1))
+	else:
+		print("Co-consul cannot receive another assassination token.")
+
+
+func patrician_trial_required_pick_count() -> int:
+	var n = 0
+	for p in state.players:
+		if not p.is_dead:
+			n += 1
+	return int(floor(n / 3.0))
+
+
+func _queue_patrician_trial_consul_pick() -> void:
+	var k = patrician_trial_required_pick_count()
+	if k <= 0:
+		_apply_patrician_trial_outcome([])
+		return
+	state.pending_post_result_awards.append(AWARD_POLICY_22_PATRICIAN_TRIAL)
+
+
+func _apply_patrician_trial_outcome(chosen_indices: Array) -> void:
+	var caesar_chosen = false
+	for x in chosen_indices:
+		var idx = int(x)
+		if idx < 0 or idx >= state.players.size():
+			continue
+		if state.players[idx].is_dead:
+			continue
+		if state.players[idx].role == Role.CAESAR:
+			caesar_chosen = true
+			break
+	if caesar_chosen:
+		for p in state.players:
+			if p.is_dead or p.role != Role.CAESAR:
+				continue
+			if p.caesar_plot_marks >= 2:
+				print("Policy 22 trial: Caesar already bears two plot marks.")
+			else:
+				p.caesar_plot_marks += 1
+				print("Policy 22 trial: Caesar gains a plot mark.")
+			return
+	var consul_id = state.current_consul_index
+	if consul_id < 0 or consul_id >= state.players.size() or state.players[consul_id].is_dead:
+		print("Policy 22 trial: no living Consul — cannot apply counters.")
+		return
+	_append_n_self_directed_assassination_counters(consul_id, 2)
+
+
+func _append_n_self_directed_assassination_counters(player_index: int, n: int) -> void:
+	if n <= 0:
+		return
+	if player_index < 0 or player_index >= state.players.size():
+		return
+	if state.players[player_index].is_dead:
+		return
+	for _i in range(n):
+		var token = AssassinationToken.new()
+		token.attacker_id = player_index
+		token.target_id = player_index
+		token.rounds_left = 3
+		token.placed_this_round = false
+		state.active_assassination_tokens.append(token)
+	print("Player %d now bears %d additional self-directed assassination counters." % [player_index + 1, n])
+
+
+func _gold_to_random_player_of_role(role: int, amount: int) -> void:
+	if amount <= 0:
+		return
+	var pool = _living_players_with_role(role)
+	if pool.is_empty():
+		print("No living players of role %d for random gold." % role)
+		return
+	var pick = pool[randi() % pool.size()]
+	state.players[pick].money += amount
+	print("Player %d gained %d gold (random %d-role representative)." % [pick + 1, amount, role])
+
+
+func _set_caesar_political_silence_next_round() -> void:
+	state.caesar_political_silence_round = state.round_number + 1
+	print("Caesar cannot vote or spend gold during round %d." % state.caesar_political_silence_round)
+
+
+func _transfer_all_gold_random_non_caesar_to_caesar() -> void:
+	var caesar_seat = -1
+	for i in range(state.players.size()):
+		if state.players[i].role == Role.CAESAR and not state.players[i].is_dead:
+			caesar_seat = i
+			break
+	if caesar_seat < 0:
+		print("No living Caesar — gold transfer fails.")
+		return
+	var victim_pool: Array = []
+	for i in range(state.players.size()):
+		if i == caesar_seat or state.players[i].is_dead:
+			continue
+		victim_pool.append(i)
+	if victim_pool.is_empty():
+		print("No other living players — Caesar gains no gold.")
+		return
+	var victim = victim_pool[randi() % victim_pool.size()]
+	var stolen = state.players[victim].money
+	state.players[caesar_seat].money += stolen
+	state.players[victim].money = 0
+	print("Caesar (Player %d) seized %d gold from Player %d." % [caesar_seat + 1, stolen, victim + 1])
+
+
+func _grant_assassination_tokens_all_living_and_lose_gold(gold_loss: int) -> void:
+	for i in range(state.players.size()):
+		if state.players[i].is_dead:
+			continue
+		_grant_assassination_token_to_player_id(i)
+		if gold_loss > 0:
+			state.players[i].money = max(state.players[i].money - gold_loss, 0)
+	if gold_loss > 0:
+		print("All living players lose %d gold." % gold_loss)
+
+
+func _set_plebeian_passive_income_bonus(amount: int, rounds: int) -> void:
+	if amount <= 0 or rounds <= 0:
+		return
+	state.plebeian_bonus_income_per_round = amount
+	state.plebeian_bonus_income_rounds_remaining = rounds
+	print("Plebeians gain +%d gold per passive income distribution for %d round(s)." % [amount, rounds])
+
+
+func _grant_two_distinct_random_assassination_tokens_for_role(role: int) -> void:
+	var pool: Array = _living_players_with_role(role)
+	var eligible: Array = []
+	for i in pool:
+		if state.players[i].available_assassination_tokens < MAX_ASSASSINATION_TOKENS_PER_PLAYER:
+			eligible.append(i)
+	eligible.shuffle()
+	if eligible.size() >= 1:
+		_grant_assassination_token_to_player_id(eligible[0])
+	if eligible.size() >= 2:
+		_grant_assassination_token_to_player_id(eligible[1])
+
+
+func _grant_one_assassination_counter_random_patrician_or_caesar() -> void:
+	var pool: Array = []
+	for i in range(state.players.size()):
+		if state.players[i].is_dead:
+			continue
+		var r = state.players[i].role
+		if r == Role.PATRICIAN or r == Role.CAESAR:
+			pool.append(i)
+	if pool.is_empty():
+		print("No living Patrician or Caesar for assassination counter.")
+		return
+	var pick = pool[randi() % pool.size()]
+	_append_n_self_directed_assassination_counters(pick, 1)
+
+
+func _remove_all_assassination_counters_on_living_players() -> void:
+	for i in range(state.active_assassination_tokens.size() - 1, -1, -1):
+		var t = state.active_assassination_tokens[i]
+		var tid = t.target_id
+		if tid >= 0 and tid < state.players.size() and not state.players[tid].is_dead:
+			state.active_assassination_tokens.remove_at(i)
+	print("Removed all assassination counters from living representatives.")
+
+
+func _apply_retain_consul_pair_next_turnover() -> void:
+	if state.current_co_consul_index < 0:
+		print("Retain consul pair: no co-consul seated.")
+		return
+	if state.players[state.current_co_consul_index].is_dead:
+		return
+	if state.players[state.current_consul_index].is_dead:
+		return
+	state.retain_consul_pair_next_turnover = true
+	state.pending_restore_co_consul_seat = state.current_co_consul_index
+	state.skip_election_this_round = true
+	print("Consul and co-consul will hold office through the next round without a new election.")
+
+
+func _gold_to_current_co_consul(amount: int) -> void:
+	if amount <= 0:
+		return
+	var cc = state.current_co_consul_index
+	if cc < 0 or cc >= state.players.size():
+		return
+	if state.players[cc].is_dead:
+		return
+	state.players[cc].money += amount
+	print("Co-consul Player %d gained %d gold." % [cc + 1, amount])
+
+
+func _redistribute_all_gold_evenly_among_living() -> void:
+	var living: Array = []
+	var total = 0
+	for i in range(state.players.size()):
+		if state.players[i].is_dead:
+			continue
+		living.append(i)
+		total += state.players[i].money
+	if living.is_empty():
+		return
+	var n = living.size()
+	var each = int(total / n)
+	for i in living:
+		state.players[i].money = each
+	print("Redistributed %d gold evenly among %d living players (%d each; %d removed from game)." % [total, n, each, total % n])
+
+
+func award_patrician_trial_consul_picks(chosen_ids: Array) -> bool:
+	if state.game_phase != "award":
+		return false
+	if state.current_award_id != AWARD_POLICY_22_PATRICIAN_TRIAL:
+		return false
+	var need = patrician_trial_required_pick_count()
+	var normalized: Array = []
+	for x in chosen_ids:
+		normalized.append(int(x))
+	if normalized.size() != need:
+		return false
+	var seen: Dictionary = {}
+	for idx in normalized:
+		if idx < 0 or idx >= state.players.size():
+			return false
+		if state.players[idx].is_dead:
+			return false
+		if seen.get(idx, false):
+			return false
+		seen[idx] = true
+	_apply_patrician_trial_outcome(normalized)
+	return true
 
 func _random_players_lose_all_gold(count: int) -> void:
 	if count <= 0:
@@ -1540,9 +1872,14 @@ func progress():
 		"init":
 			start_round()
 		"round_start":
-			state.game_phase = "election"
-			## Same frame as entering election (host + hotseat); online clients never ran hotseat AI pick.
-			auto_select_ai_nominee()
+			if state.skip_election_this_round:
+				state.skip_election_this_round = false
+				state.game_phase = "policy"
+				start_policy_phase()
+			else:
+				state.game_phase = "election"
+				## Same frame as entering election (host + hotseat); online clients never ran hotseat AI pick.
+				auto_select_ai_nominee()
 		"election":
 			if state.election_nominee_index < 0:
 				auto_select_ai_nominee()
@@ -1792,6 +2129,14 @@ func try_auto_resolve_current_award_if_ai_consul() -> void:
 			AWARD_POLICY_11_INFLUENCE_CHOICE:
 				var fac = Role.PATRICIAN if randf() < 0.5 else Role.PLEBIAN
 				award_choose_influence_no_awards(fac)
+			AWARD_POLICY_22_PATRICIAN_TRIAL:
+				var k = patrician_trial_required_pick_count()
+				var living_pool = get_living_player_indices()
+				living_pool.shuffle()
+				var picks: Array = []
+				for _j in range(min(k, living_pool.size())):
+					picks.append(living_pool[_j])
+				award_patrician_trial_consul_picks(picks)
 			_:
 				pass
 		finish_current_award()
@@ -2179,6 +2524,14 @@ func serialize_state() -> Dictionary:
 		"plebeian_milestones_forfeited": state.plebeian_milestones_forfeited.duplicate(),
 		"pending_patrician_double_discard": state.pending_patrician_double_discard,
 		"pending_plebeian_auto_election": state.pending_plebeian_auto_election,
+		"double_next_policy_gold_active": state.double_next_policy_gold_active,
+		"double_next_policy_influence_active": state.double_next_policy_influence_active,
+		"caesar_political_silence_round": state.caesar_political_silence_round,
+		"plebeian_bonus_income_per_round": state.plebeian_bonus_income_per_round,
+		"plebeian_bonus_income_rounds_remaining": state.plebeian_bonus_income_rounds_remaining,
+		"retain_consul_pair_next_turnover": state.retain_consul_pair_next_turnover,
+		"pending_restore_co_consul_seat": state.pending_restore_co_consul_seat,
+		"skip_election_this_round": state.skip_election_this_round,
 		"current_consul_index": state.current_consul_index,
 		"current_co_consul_index": state.current_co_consul_index,
 		"game_phase": state.game_phase,
@@ -2275,6 +2628,14 @@ func apply_state_snapshot(data: Dictionary) -> void:
 	state.plebeian_milestones_forfeited = data.get("plebeian_milestones_forfeited", [])
 	state.pending_patrician_double_discard = bool(data.get("pending_patrician_double_discard", false))
 	state.pending_plebeian_auto_election = bool(data.get("pending_plebeian_auto_election", false))
+	state.double_next_policy_gold_active = bool(data.get("double_next_policy_gold_active", false))
+	state.double_next_policy_influence_active = bool(data.get("double_next_policy_influence_active", false))
+	state.caesar_political_silence_round = int(data.get("caesar_political_silence_round", -1))
+	state.plebeian_bonus_income_per_round = int(data.get("plebeian_bonus_income_per_round", 0))
+	state.plebeian_bonus_income_rounds_remaining = int(data.get("plebeian_bonus_income_rounds_remaining", 0))
+	state.retain_consul_pair_next_turnover = bool(data.get("retain_consul_pair_next_turnover", false))
+	state.pending_restore_co_consul_seat = int(data.get("pending_restore_co_consul_seat", -1))
+	state.skip_election_this_round = bool(data.get("skip_election_this_round", false))
 	state.current_consul_index = int(data.get("current_consul_index", 0))
 	state.current_co_consul_index = int(data.get("current_co_consul_index", -1))
 	state.game_phase = str(data.get("game_phase", "init"))
@@ -2544,6 +2905,15 @@ func rpc_award_choose_influence(faction: int) -> void:
 	if not _rpc_award_consul_sender_ok():
 		return
 	award_choose_influence_no_awards(faction)
+	broadcast_state()
+
+@rpc("any_peer", "reliable", "call_local")
+func rpc_award_patrician_trial_picks(chosen_ids: Array) -> void:
+	if not _is_authority():
+		return
+	if not _rpc_award_consul_sender_ok():
+		return
+	award_patrician_trial_consul_picks(chosen_ids)
 	broadcast_state()
 
 @rpc("any_peer", "reliable", "call_local")

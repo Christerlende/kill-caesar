@@ -16,6 +16,7 @@ const AWARD_PATRICIAN_6_EXECUTION: int = 5
 const AWARD_POLICY_5_SPENDING_LOCK: int = 6
 const AWARD_POLICY_7_NEXT_CONSUL: int = 7
 const AWARD_POLICY_11_INFLUENCE_CHOICE: int = 8
+const AWARD_POLICY_22_PATRICIAN_TRIAL: int = 9
 
 var game_manager = null
 
@@ -131,7 +132,7 @@ func _show_online_waiting() -> void:
 func _show_handoff() -> void:
 	var consul_name = game_manager.get_player_name(game_manager.state.current_consul_index)
 	var award_id = game_manager.get_current_award_id()
-	if award_id == AWARD_POLICY_5_SPENDING_LOCK or award_id == AWARD_POLICY_7_NEXT_CONSUL or award_id == AWARD_POLICY_11_INFLUENCE_CHOICE:
+	if award_id == AWARD_POLICY_5_SPENDING_LOCK or award_id == AWARD_POLICY_7_NEXT_CONSUL or award_id == AWARD_POLICY_11_INFLUENCE_CHOICE or award_id == AWARD_POLICY_22_PATRICIAN_TRIAL:
 		_instruction_label.text = "Pass the device to Consul %s. The consul must resolve this policy choice." % consul_name
 	else:
 		_instruction_label.text = "Pass the device to Consul %s. Only the consul should see the reveal." % consul_name
@@ -174,6 +175,10 @@ func _show_award_controls() -> void:
 		AWARD_POLICY_11_INFLUENCE_CHOICE:
 			_instruction_label.text = "Choose one influence bar to increase by +1. This does not trigger influence awards."
 			_build_influence_choice_buttons()
+		AWARD_POLICY_22_PATRICIAN_TRIAL:
+			var need = game_manager.patrician_trial_required_pick_count()
+			_instruction_label.text = "Choose exactly %d distinct living representatives (floor of N divided by 3)." % need
+			_build_patrician_trial_picker()
 		_:
 			_instruction_label.text = "No award to resolve."
 			_continue_button.visible = true
@@ -207,6 +212,50 @@ func _build_two_role_picker() -> void:
 	reveal_button.disabled = _selected_player_ids.size() != 2
 	reveal_button.pressed.connect(_on_two_role_reveal_pressed)
 	_content.add_child(reveal_button)
+
+func _build_patrician_trial_picker() -> void:
+	var need: int = game_manager.patrician_trial_required_pick_count()
+	var row = HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 10)
+	_content.add_child(row)
+	for player_id in game_manager.get_living_player_indices():
+		var cb = CheckBox.new()
+		cb.text = game_manager.get_player_name(player_id)
+		cb.button_pressed = _selected_player_ids.has(player_id)
+		cb.toggled.connect(_on_patrician_trial_target_toggled.bind(player_id, need))
+		row.add_child(cb)
+
+	var reveal_button = Button.new()
+	reveal_button.text = "Confirm trial selection"
+	reveal_button.disabled = _selected_player_ids.size() != need
+	reveal_button.pressed.connect(_on_patrician_trial_confirm_pressed)
+	_content.add_child(reveal_button)
+
+func _on_patrician_trial_target_toggled(is_on: bool, player_id: int, need: int) -> void:
+	if is_on:
+		if not _selected_player_ids.has(player_id) and _selected_player_ids.size() < need:
+			_selected_player_ids.append(player_id)
+	else:
+		_selected_player_ids.erase(player_id)
+	_show_award_controls()
+
+func _on_patrician_trial_confirm_pressed() -> void:
+	if _policy_choice_done:
+		return
+	var need = game_manager.patrician_trial_required_pick_count()
+	if _selected_player_ids.size() != need:
+		return
+	if game_manager.is_online_game():
+		game_manager.rpc_award_patrician_trial_picks.rpc_id(1, _selected_player_ids.duplicate())
+	else:
+		if not game_manager.award_patrician_trial_consul_picks(_selected_player_ids):
+			_show_award_controls()
+			return
+	_policy_choice_done = true
+	_clear_content()
+	_instruction_label.text = "The trial is concluded. The senate scribes record the verdict."
+	_continue_button.visible = true
 
 func _build_influence_choice_buttons() -> void:
 	var row = HBoxContainer.new()
@@ -394,6 +443,8 @@ func _award_title(award_id: int) -> String:
 			return "PLEBEIAN POLICY: CHOOSE NEXT CONSUL"
 		AWARD_POLICY_11_INFLUENCE_CHOICE:
 			return "PLEBEIAN POLICY: CHOOSE INFLUENCE"
+		AWARD_POLICY_22_PATRICIAN_TRIAL:
+			return "PATRICIAN POLICY: TRIAL OF INFLUENCE"
 		_:
 			return "INFLUENCE AWARD"
 

@@ -391,6 +391,16 @@ func _update_voting(state) -> void:
 				dead_note.custom_minimum_size = Vector2(400, 0)
 				_voter_grid.add_child(dead_note)
 				return
+			if not game_manager.is_player_election_vote_required(local_seat):
+				var silence_note = Label.new()
+				silence_note.text = "The Senate has stripped your ballot this round. You cannot vote."
+				silence_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				silence_note.add_theme_font_size_override("font_size", 18)
+				silence_note.add_theme_color_override("font_color", COLOR_DIM)
+				silence_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				silence_note.custom_minimum_size = Vector2(400, 0)
+				_voter_grid.add_child(silence_note)
+				return
 			voter_indices.append(local_seat)
 		else:
 			var wait_label = Label.new()
@@ -457,6 +467,17 @@ func _update_voting(state) -> void:
 		name_label.add_theme_font_size_override("font_size", 16)
 		name_label.add_theme_color_override("font_color", COLOR_CREAM)
 		name_row.add_child(name_label)
+
+		if not player.is_dead and not game_manager.is_player_election_vote_required(player_id):
+			var sil = Label.new()
+			sil.text = "Silenced — cannot vote this round."
+			sil.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			sil.add_theme_font_size_override("font_size", 15)
+			sil.add_theme_color_override("font_color", COLOR_DIM)
+			sil.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			col.add_child(sil)
+			_voter_grid.add_child(card)
+			continue
 
 		if vote_state != -1:
 			var check_icon = Label.new()

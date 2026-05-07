@@ -27,6 +27,8 @@ var policy_spending_locked_player_ids: Array = []
 var forced_next_consul_index: int = -1
 var double_next_policy_gold_active: bool = false
 var double_next_policy_influence_active: bool = false
+## Round number (matches `round_number` during that round) when living Caesar cannot vote or spend. -1 = inactive.
+var caesar_political_silence_round: int = -1
 var income_block_rounds_by_player: Dictionary = {}
 
 # Phase result data for UI display

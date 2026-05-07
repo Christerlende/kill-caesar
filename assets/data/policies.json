@@ -407,5 +407,95 @@
       },
       "result_text": "Famine returned like an old curse. Bread vanished, Caesar's revenue faltered, and one Patrician again found the knives already counted.\nPlebeians lose passive income for 2 rounds. A random Patrician is set to 2 assassination counters. Caesar loses income for 1 round and cannot spend gold next round."
     }
+  },
+  {
+    "id": 21,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "The co-consul receives an assassination token",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_assassination_token_to_current_co_consul",
+      "effect_params": {},
+      "result_text": "The people's decree recognized the second magistrate. A sealed token passed to the co-consul's hand, and the balance of fear shifted in the chamber.\nThe co-consul gains an assassination token if one can be held."
+    },
+    "option_b": {
+      "text": "The Consul receives an assassination token",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_assassination_token_to_current_consul",
+      "effect_params": {},
+      "result_text": "The rostra shook with approval as the chief magistrate's authority took on a sharper edge. What was granted openly would be settled in whispers later.\nThe Consul gains an assassination token if one can be held."
+    }
+  },
+  {
+    "id": 22,
+    "faction": "patrician",
+    "option_a": {
+      "text": "The Consul accuses floor(N/3) representatives in a trial of influence (Consul chooses distinct living players)",
+      "beneficiary": "patrician",
+      "effect_type": "queue_patrician_trial_consul_pick",
+      "effect_params": {},
+      "result_text": "The Consul names the accused before the Senate. If Caesar stands among them, a plot mark tightens around the throne; otherwise the Consul himself is marked by two closing blades of suspicion.\nThe Consul will choose representatives; Caesar among them gains a plot mark (max 2), or else the Consul gains two assassination counters."
+    },
+    "option_b": {
+      "text": "Patrician influence rises by 1",
+      "beneficiary": "patrician",
+      "effect_type": "grant_influence",
+      "effect_params": { "faction": "patrician", "amount": 1 },
+      "result_text": "The nobles spoke as one, and every syllable dripped old blood and older privilege.\nPatrician influence +1."
+    }
+  },
+  {
+    "id": 23,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Caesar gains an assassination token",
+      "beneficiary": "caesar",
+      "effect_type": "grant_assassination_token",
+      "effect_params": { "target_role": "caesar" },
+      "result_text": "The decree reached the palace in sealed wax. Caesar accepted the token without ceremony — Rome would remember who held the knives.\nCaesar gains an assassination token if one can be held."
+    },
+    "option_b": {
+      "text": "One random Plebeian representative gains 12 gold",
+      "beneficiary": "plebeian",
+      "effect_type": "gold_to_random_player_of_role",
+      "effect_params": { "role": "plebeian", "amount": 12 },
+      "result_text": "Coin found a single worthy pocket in the lower city — not by accident, but by the will of the crowd.\nOne living Plebeian gains +12 gold."
+    }
+  },
+  {
+    "id": 24,
+    "faction": "patrician",
+    "option_a": {
+      "text": "Next policy round, Caesar cannot vote in the election or spend gold on the decree",
+      "beneficiary": "patrician",
+      "effect_type": "set_caesar_political_silence_next_round",
+      "effect_params": {},
+      "result_text": "A procedural gag bound the tyrant's voice. Until the next round of lawgiving, Caesar would watch the Forum decide without him.\nNext round: Caesar cannot vote or spend gold on the policy."
+    },
+    "option_b": {
+      "text": "Caesar seizes one random other representative's entire purse",
+      "beneficiary": "caesar",
+      "effect_type": "transfer_all_gold_random_to_caesar",
+      "effect_params": {},
+      "result_text": "Soldiers moved before dawn. One ledger bled dry and Caesar's chest grew heavy with someone else's fortune.\nAll gold held by one random living non-Caesar representative transfers to Caesar."
+    }
+  },
+  {
+    "id": 25,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "The Consul gains an assassination token",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_assassination_token_to_current_consul",
+      "effect_params": {},
+      "result_text": "The people's law armed the chief magistrate. A token changed hands beneath the rostra, and patience in the chamber grew thin.\nThe Consul gains an assassination token if one can be held."
+    },
+    "option_b": {
+      "text": "Every living representative gains an assassination token and loses 15 gold",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_assassination_tokens_all_living_lose_gold",
+      "effect_params": { "gold_loss": 15 },
+      "result_text": "Panic and opportunity struck together. Tokens multiplied in every living hand while purses lightened to pay for the spectacle.\nAll living players gain an assassination token (if possible) and lose 15 gold."
+    }
   }
 ]

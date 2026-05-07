@@ -60,6 +60,15 @@ const AWARD_POLICY_7_NEXT_CONSUL: int = 7
 const AWARD_POLICY_11_INFLUENCE_CHOICE: int = 8
 const AWARD_THRESHOLDS: Array = [2, 4, 6]
 
+## Synced Continue bar (host). Kind stored in GameState.continue_gate_kind.
+const CONTINUE_GATE_NONE: int = 0
+const CONTINUE_GATE_ELECTION_RESULT: int = 1
+const CONTINUE_GATE_POLICY_REVEAL: int = 2
+const CONTINUE_GATE_SPENDING_RESOLVED: int = 3
+const CONTINUE_GATE_RESULT_SCREEN: int = 4
+const CONTINUE_GATE_GREED: int = 5
+const CONTINUE_TIMEOUT_SEC: float = 20.0
+
 @onready var state: GameState = GameState.new()
 var pending_policy_choices: Array = []
 var _discarded_policy_objects: Array = []
@@ -72,9 +81,6 @@ var _patrician_double_discard_active: bool = false
 var hotseat_viewer_seat: int = -1
 var _policy_reveal_advance_pending: bool = false
 var _policy_reveal_seq: int = 0
-const POLICY_REVEAL_SECONDS: float = 5.0
-## After treasury totals resolve (non-greed), session authority auto-advances to the result phase.
-const SPENDING_RESOLVED_TO_RESULT_SEC: float = 5.0
 ## While result panel runs policy then decree: if policy queued a milestone, decree influence only forfeits bands.
 var _policy_milestone_awarded_this_resolution: bool = false
 ## Snapshotted when the result fade sequence starts, before policy +1 influence is applied — used for policy 17 tie logic.
@@ -82,6 +88,7 @@ var _influence_snapshot_patrician_for_decree: int = 0
 var _influence_snapshot_plebian_for_decree: int = 0
 ## Prevents double auto-resolution of the same queued award (see try_auto_resolve_current_award_if_ai_consul).
 var _ai_award_auto_resolved_stamp: String = ""
+var _continue_gate_timer_seq: int = 0
 
 func role_name(role: int) -> String:
 	match role:
@@ -522,6 +529,8 @@ func select_election_nominee(nominee_index: int) -> bool:
 				state.election_votes_yes.append(i)
 		_complete_successful_election(nominee_index)
 		print("Plebeian influence award: nominee auto-elected as co-consul.")
+		if _is_authority():
+			open_continue_gate(CONTINUE_GATE_ELECTION_RESULT)
 	return true
 
 func set_election_vote(player_id: int, is_yes: bool) -> bool:
@@ -585,10 +594,14 @@ func conduct_election() -> bool:
 		state.election_passed = true
 		print("Election passed, player %d is co-consul" % nominee)
 		_complete_successful_election(nominee)
+		if _is_authority():
+			open_continue_gate(CONTINUE_GATE_ELECTION_RESULT)
 		return true
 	else:
 		state.election_passed = false
 		print("Election failed")
+		if _is_authority():
+			open_continue_gate(CONTINUE_GATE_ELECTION_RESULT)
 		return false
 
 func _complete_successful_election(nominee: int) -> void:
@@ -703,24 +716,8 @@ func _schedule_policy_reveal_advance() -> void:
 		return
 	if policy_discard_stage != "reveal" or state.policy_enacted == null:
 		return
-	_policy_reveal_seq += 1
-	var seq: int = _policy_reveal_seq
 	_policy_reveal_advance_pending = true
-	var tree = get_tree()
-	if tree == null:
-		_policy_reveal_advance_pending = false
-		return
-	tree.create_timer(POLICY_REVEAL_SECONDS).timeout.connect(func(): _on_policy_reveal_timer_timeout(seq), CONNECT_ONE_SHOT)
-
-func _on_policy_reveal_timer_timeout(expected_seq: int) -> void:
-	_policy_reveal_advance_pending = false
-	if expected_seq != _policy_reveal_seq:
-		return
-	if state.game_phase != "policy" or policy_discard_stage != "reveal":
-		return
-	state.game_phase = "spending"
-	start_spending_phase()
-	broadcast_state()
+	open_continue_gate(CONTINUE_GATE_POLICY_REVEAL)
 
 func _try_auto_ai_policy_discard() -> void:
 	if not _is_authority():
@@ -897,21 +894,8 @@ func resolve_spending_totals() -> void:
 			broadcast_state()
 		return
 	if _is_authority() and is_inside_tree():
-		get_tree().create_timer(SPENDING_RESOLVED_TO_RESULT_SEC).timeout.connect(
-			_on_spending_resolved_to_result_timeout, CONNECT_ONE_SHOT
-		)
+		open_continue_gate(CONTINUE_GATE_SPENDING_RESOLVED)
 	if is_online_game() and _is_authority():
-		broadcast_state()
-
-func _on_spending_resolved_to_result_timeout() -> void:
-	if not _is_authority():
-		return
-	if state.game_phase != "spending" or state.spending_stage != "resolved":
-		return
-	if state.greed_round:
-		return
-	progress()
-	if is_online_game():
 		broadcast_state()
 
 func _schedule_enter_greed_after_delay() -> void:
@@ -2021,6 +2005,134 @@ func is_local_player_turn_to_act() -> bool:
 		_:
 			return false
 
+func get_continue_actor_seat() -> int:
+	if is_online_game():
+		return get_local_seat()
+	return hotseat_viewer_seat
+
+
+func _living_player_indices_continue() -> Array:
+	var out: Array = []
+	for i in range(state.players.size()):
+		if not state.players[i].is_dead:
+			out.append(i)
+	return out
+
+
+func continue_living_ready_count() -> int:
+	var n := 0
+	for i in _living_player_indices_continue():
+		if i < state.continue_ready.size() and state.continue_ready[i]:
+			n += 1
+	return n
+
+
+func continue_living_total() -> int:
+	return _living_player_indices_continue().size()
+
+
+func open_continue_gate(kind: int) -> void:
+	if not _is_authority():
+		return
+	if kind == CONTINUE_GATE_NONE:
+		return
+	state.continue_gate_id += 1
+	state.continue_gate_kind = kind
+	state.continue_ready.clear()
+	for _j in range(state.players.size()):
+		state.continue_ready.append(false)
+	for i in _living_player_indices_continue():
+		if state.players[i].is_ai:
+			state.continue_ready[i] = true
+	state.continue_deadline_msec = Time.get_ticks_msec() + int(CONTINUE_TIMEOUT_SEC * 1000.0)
+	_continue_gate_timer_seq += 1
+	var seq: int = _continue_gate_timer_seq
+	var gid: int = state.continue_gate_id
+	var tree: SceneTree = get_tree()
+	if tree:
+		var on_gate_timeout := func():
+			if seq != _continue_gate_timer_seq:
+				return
+			if state.continue_gate_id != gid:
+				return
+			_try_complete_continue_gate()
+		tree.create_timer(CONTINUE_TIMEOUT_SEC).timeout.connect(on_gate_timeout, CONNECT_ONE_SHOT)
+	_try_complete_continue_gate()
+	if is_online_game():
+		broadcast_state()
+
+
+func _try_complete_continue_gate() -> void:
+	if not _is_authority():
+		return
+	var kind: int = state.continue_gate_kind
+	if kind == CONTINUE_GATE_NONE:
+		return
+	var all_ready: bool = true
+	for i in _living_player_indices_continue():
+		if i >= state.continue_ready.size() or not state.continue_ready[i]:
+			all_ready = false
+			break
+	var timed_out: bool = Time.get_ticks_msec() >= state.continue_deadline_msec
+	if not all_ready and not timed_out:
+		return
+	state.continue_gate_kind = CONTINUE_GATE_NONE
+	state.continue_deadline_msec = 0
+	state.continue_ready.clear()
+	_continue_gate_timer_seq += 1
+	_execute_continue_gate_advance(kind)
+
+
+func _execute_continue_gate_advance(kind: int) -> void:
+	match kind:
+		CONTINUE_GATE_ELECTION_RESULT:
+			progress()
+		CONTINUE_GATE_POLICY_REVEAL:
+			_policy_reveal_advance_pending = false
+			if state.game_phase == "policy" and policy_discard_stage == "reveal":
+				state.game_phase = "spending"
+				start_spending_phase()
+		CONTINUE_GATE_SPENDING_RESOLVED:
+			if (
+				state.game_phase == "spending"
+				and state.spending_stage == "resolved"
+				and not state.greed_round
+			):
+				progress()
+		CONTINUE_GATE_RESULT_SCREEN:
+			if state.game_phase == "result":
+				progress()
+		CONTINUE_GATE_GREED:
+			if state.game_phase == "greed":
+				progress()
+	if is_online_game() and _is_authority():
+		broadcast_state()
+
+
+func submit_continue_ready() -> void:
+	if not state:
+		return
+	var gid: int = state.continue_gate_id
+	if gid == 0 or state.continue_gate_kind == CONTINUE_GATE_NONE:
+		return
+	if is_online_game():
+		rpc_submit_continue_ready.rpc_id(1, gid)
+		return
+	if not _is_authority():
+		return
+	var seat: int = get_continue_actor_seat()
+	if seat < 0 or seat >= state.players.size():
+		return
+	if state.players[seat].is_dead:
+		return
+	if seat >= state.continue_ready.size() or state.continue_ready[seat]:
+		return
+	state.continue_ready[seat] = true
+	_try_complete_continue_gate()
+	if is_online_game():
+		broadcast_state()
+
+
 # ── State serialization ──────────────────────────────────────
 
 func serialize_state() -> Dictionary:
@@ -2106,6 +2218,10 @@ func serialize_state() -> Dictionary:
 		"patrician_double_discard_active": _patrician_double_discard_active,
 		"influence_snapshot_patrician_for_decree": _influence_snapshot_patrician_for_decree,
 		"influence_snapshot_plebian_for_decree": _influence_snapshot_plebian_for_decree,
+		"continue_gate_id": state.continue_gate_id,
+		"continue_gate_kind": state.continue_gate_kind,
+		"continue_ready": state.continue_ready.duplicate(),
+		"continue_deadline_msec": state.continue_deadline_msec,
 		"seat_for_peer": seat_for_peer.duplicate(),
 		"peer_for_seat": peer_for_seat.duplicate(),
 		# Static vars that clients need
@@ -2257,6 +2373,13 @@ func apply_state_snapshot(data: Dictionary) -> void:
 	last_player_snapshots = data.get("last_player_snapshots", [])
 	_influence_snapshot_patrician_for_decree = int(data.get("influence_snapshot_patrician_for_decree", state.influence_patrician))
 	_influence_snapshot_plebian_for_decree = int(data.get("influence_snapshot_plebian_for_decree", state.influence_plebian))
+	state.continue_gate_id = int(data.get("continue_gate_id", 0))
+	state.continue_gate_kind = int(data.get("continue_gate_kind", 0))
+	var cr_in = data.get("continue_ready", [])
+	state.continue_ready.clear()
+	for i in range(state.players.size()):
+		state.continue_ready.append(i < cr_in.size() and bool(cr_in[i]))
+	state.continue_deadline_msec = int(data.get("continue_deadline_msec", 0))
 
 func broadcast_state() -> void:
 	if not is_online_game() or not _is_authority():
@@ -2342,6 +2465,26 @@ func rpc_progress() -> void:
 		return
 	progress()
 	broadcast_state()
+
+@rpc("any_peer", "reliable", "call_local")
+func rpc_submit_continue_ready(gate_id: int) -> void:
+	if not _is_authority():
+		return
+	if gate_id != state.continue_gate_id:
+		return
+	if state.continue_gate_kind == CONTINUE_GATE_NONE:
+		return
+	var seat: int = _authority_seat_for_rpc_sender()
+	if seat < 0 or seat >= state.players.size():
+		return
+	if state.players[seat].is_dead:
+		return
+	if seat >= state.continue_ready.size() or state.continue_ready[seat]:
+		return
+	state.continue_ready[seat] = true
+	_try_complete_continue_gate()
+	if is_online_game() and state.continue_gate_kind != CONTINUE_GATE_NONE:
+		broadcast_state()
 
 @rpc("any_peer", "reliable", "call_local")
 func rpc_place_assassination_token(attacker_id: int, target_id: int) -> void:

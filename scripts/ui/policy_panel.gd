@@ -4,6 +4,8 @@ extends PanelContainer
 # Shows 3 scroll-style policy cards. Consul discards one, then co-consul discards one.
 
 const Role = preload("res://scripts/data/role.gd").Role
+const GameManager = preload("res://scripts/game/game_manager.gd")
+const SyncedContinueBar = preload("res://scripts/ui/synced_continue_bar.gd")
 
 const COLOR_GOLD = Color(0.95, 0.82, 0.25, 1)
 const COLOR_CREAM = Color(0.95, 0.92, 0.85, 1)
@@ -27,6 +29,7 @@ var _confirm_section: VBoxContainer
 var _confirm_label: Label
 var _confirm_button: Button
 var _cancel_button: Button
+var _sync_continue_bar: Node
 
 # state
 var _selected_policy_id: int = -1
@@ -85,9 +88,15 @@ func _ready():
 	_cancel_button.pressed.connect(_on_cancel_pressed)
 	btn_row.add_child(_cancel_button)
 
+	_sync_continue_bar = SyncedContinueBar.new()
+	_sync_continue_bar.expected_gate_kind = GameManager.CONTINUE_GATE_POLICY_REVEAL
+	root_vbox.add_child(_sync_continue_bar)
+
 func _process(_delta):
 	if not game_manager:
 		return
+	if _sync_continue_bar and _sync_continue_bar.game_manager != game_manager:
+		_sync_continue_bar.game_manager = game_manager
 	var state = game_manager.state
 	if not state or state.game_phase != "policy":
 		return
@@ -422,6 +431,8 @@ func reset_panel() -> void:
 	_last_ui_key = ""
 	_card_nodes.clear()
 	_confirm_section.visible = false
+	if _sync_continue_bar and _sync_continue_bar.has_method("reset_local_state"):
+		_sync_continue_bar.reset_local_state()
 	for child in _cards_row.get_children():
 		child.queue_free()
 

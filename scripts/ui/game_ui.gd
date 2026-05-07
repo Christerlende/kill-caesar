@@ -2,6 +2,7 @@ extends Control
 
 const ROME_COLLAPSE_WINNER: String = "collapse"
 const GM = preload("res://scripts/game/game_manager.gd")
+const SyncedContinueBar = preload("res://scripts/ui/synced_continue_bar.gd")
 
 var game_manager
 var round_label: Label
@@ -888,10 +889,12 @@ func _update_spending_controls(state) -> void:
 		var done = Label.new()
 		done.text = "All private spending captured. Totals are now public."
 		spending_controls_container.add_child(done)
-		var continue_button = Button.new()
-		continue_button.text = "Continue"
-		continue_button.pressed.connect(Callable(self, "_on_spending_continue_pressed"))
-		spending_controls_container.add_child(continue_button)
+		if not state.greed_round:
+			var bar = SyncedContinueBar.new()
+			bar.game_manager = game_manager
+			bar.expected_gate_kind = GM.CONTINUE_GATE_SPENDING_RESOLVED
+			bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			spending_controls_container.add_child(bar)
 
 func _sidebar_policy_viewer_index(state) -> int:
 	if not game_manager or state.players.size() == 0:
@@ -1169,11 +1172,3 @@ func _on_spending_pay_pressed() -> void:
 	else:
 		game_manager.set_spending_allocation(_spend_selected_option, _spend_amount_draft)
 	_spending_ui_key = ""
-
-func _on_spending_continue_pressed() -> void:
-	if game_manager.state.greed_round:
-		return
-	if game_manager.is_online_game():
-		game_manager.rpc_progress.rpc_id(1)
-	else:
-		game_manager.progress()

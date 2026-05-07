@@ -70,6 +70,14 @@ var last_greed_punishment_id: int = -1
 var deadlock_round: bool = false
 var last_deadlock_effect_id: int = -1
 
+## Synced continue gate (host-driven; see GameManager CONTINUE_GATE_*).
+var continue_gate_id: int = 0
+## 0 = no active gate
+var continue_gate_kind: int = 0
+var continue_ready: Array = []
+## Host clock: Time.get_ticks_msec() when the gate times out (for optional UI).
+var continue_deadline_msec: int = 0
+
 func _init():
     players = []
     all_policies = []

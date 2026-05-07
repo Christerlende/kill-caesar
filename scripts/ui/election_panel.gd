@@ -1,5 +1,8 @@
 extends PanelContainer
 
+const GameManager = preload("res://scripts/game/game_manager.gd")
+const SyncedContinueBar = preload("res://scripts/ui/synced_continue_bar.gd")
+
 # Roman-themed election panel with three sections:
 # Top: nomination info / header
 # Middle: voting cards
@@ -36,20 +39,16 @@ var _last_device_row_key: String = ""
 var _voter_grid: HBoxContainer
 var _result_label: Label
 var _result_breakdown: Label
-var _continue_button: Button
-var _result_countdown_label: Label
+var _synced_continue_bar: Node
 
 # state tracking
 var _last_nominee_index: int = -99
 var _last_vote_signature: String = ""
 var _last_phase: String = ""
 var _showing_result: bool = false
-var _result_auto_advance_time_left: float = 0.0
 var _auto_resolve_queued: bool = false
 var _result_reveal_played: bool = false
 var _voting_reveal_played: bool = false
-
-const RESULT_TRANSITION_SECONDS: float = 5.0
 
 func _ready():
 	clip_contents = true
@@ -146,39 +145,9 @@ func _ready():
 	_result_breakdown.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_bottom_content.add_child(_result_breakdown)
 
-	_continue_button = Button.new()
-	_continue_button.text = "Continue"
-	_continue_button.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	_continue_button.visible = false
-	_continue_button.pressed.connect(_on_continue_pressed)
-	_continue_button.add_theme_color_override("font_color", COLOR_CREAM)
-	_continue_button.add_theme_color_override("font_focus_color", COLOR_CREAM)
-	_continue_button.add_theme_color_override("font_hover_color", COLOR_CREAM)
-	_continue_button.add_theme_color_override("font_pressed_color", COLOR_CREAM)
-	var cs = StyleBoxFlat.new()
-	cs.bg_color = Color(0.14, 0.62, 0.18, 0.95)
-	cs.border_width_left = 1
-	cs.border_width_top = 1
-	cs.border_width_right = 1
-	cs.border_width_bottom = 1
-	cs.border_color = Color(0.78, 0.9, 0.78, 0.7)
-	cs.corner_radius_top_left = 6
-	cs.corner_radius_top_right = 6
-	cs.corner_radius_bottom_left = 6
-	cs.corner_radius_bottom_right = 6
-	cs.content_margin_left = 16
-	cs.content_margin_right = 16
-	cs.content_margin_top = 8
-	cs.content_margin_bottom = 8
-	_continue_button.add_theme_stylebox_override("normal", cs)
-	_continue_button.add_theme_stylebox_override("focus", cs)
-	_continue_button.add_theme_stylebox_override("pressed", cs)
-	_continue_button.add_theme_stylebox_override("hover", cs)
-	_bottom_content.add_child(_continue_button)
-
-	_result_countdown_label = _make_label("", 18, COLOR_DIM, HORIZONTAL_ALIGNMENT_CENTER)
-	_result_countdown_label.visible = false
-	_bottom_content.add_child(_result_countdown_label)
+	_synced_continue_bar = SyncedContinueBar.new()
+	_synced_continue_bar.expected_gate_kind = GameManager.CONTINUE_GATE_ELECTION_RESULT
+	_bottom_content.add_child(_synced_continue_bar)
 
 func is_showing_result() -> bool:
 	return _showing_result
@@ -186,21 +155,23 @@ func is_showing_result() -> bool:
 func _process(_delta):
 	if not game_manager:
 		return
+	if _synced_continue_bar and _synced_continue_bar.game_manager != game_manager:
+		_synced_continue_bar.game_manager = game_manager
 	var state = game_manager.state
 	if not state:
 		return
-	if state.game_phase != "election" and not _showing_result:
+	if state.game_phase != "election":
+		if _showing_result:
+			_showing_result = false
+			if _synced_continue_bar and _synced_continue_bar.has_method("reset_local_state"):
+				_synced_continue_bar.reset_local_state()
 		return
 	if state.game_phase == "election" and state.auto_election_award_active and _is_election_resolved(state) and not _showing_result:
 		_show_auto_election_result(state)
 	if state.game_phase == "election" and not state.auto_election_award_active and _is_election_resolved(state) and not _showing_result:
 		_enter_election_result_overlay()
 	if _showing_result:
-		_result_auto_advance_time_left = max(_result_auto_advance_time_left - _delta, 0.0)
-		_update_continue_button_text()
 		_update_result(state)
-		if _result_auto_advance_time_left <= 0.0:
-			_advance_after_result()
 		return
 	_update_consul_info(state)
 	_update_nominee(state)
@@ -217,9 +188,6 @@ func _update_nominee(state) -> void:
 		_middle_content.visible = false
 		_bottom_content.visible = false
 		_voting_reveal_played = false
-		_continue_button.visible = false
-		if _result_countdown_label:
-			_result_countdown_label.visible = false
 		if _last_nominee_index != -1:
 			_last_nominee_index = -1
 			_last_nominee_button_key = ""
@@ -422,7 +390,6 @@ func _update_voting(state) -> void:
 				dead_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 				dead_note.custom_minimum_size = Vector2(400, 0)
 				_voter_grid.add_child(dead_note)
-				_sync_election_result_chrome()
 				return
 			voter_indices.append(local_seat)
 		else:
@@ -432,7 +399,6 @@ func _update_voting(state) -> void:
 			wait_label.add_theme_font_size_override("font_size", 18)
 			wait_label.add_theme_color_override("font_color", COLOR_DIM)
 			_voter_grid.add_child(wait_label)
-			_sync_election_result_chrome()
 			return
 	else:
 		for player_id in range(state.players.size()):
@@ -535,7 +501,6 @@ func _update_voting(state) -> void:
 
 		_voter_grid.add_child(card)
 
-	_sync_election_result_chrome()
 	var ready_to_tally: bool = all_humans_voted if game_manager.is_online_game() else all_voted
 	if ready_to_tally and not election_resolved and not _auto_resolve_queued and not _showing_result:
 		if game_manager.is_online_game():
@@ -594,9 +559,6 @@ func _enter_election_result_overlay() -> void:
 		return
 	var st = game_manager.state
 	_showing_result = true
-	_result_auto_advance_time_left = RESULT_TRANSITION_SECONDS
-	_sync_election_result_chrome()
-	_update_continue_button_text()
 	_last_vote_signature = ""
 	_result_reveal_played = false
 	_update_voting(st)
@@ -605,15 +567,12 @@ func _enter_election_result_overlay() -> void:
 
 func _show_auto_election_result(state) -> void:
 	_showing_result = true
-	_result_auto_advance_time_left = RESULT_TRANSITION_SECONDS
-	_sync_election_result_chrome()
 	_clear_nominee_buttons()
 	_clear_hotseat_device_row()
 	_last_nominee_index = state.election_nominee_index
 	_middle_content.visible = false
 	_bottom_content.visible = true
 	_last_vote_signature = ""
-	_update_continue_button_text()
 	_update_result(state)
 	_play_result_reveal_animation()
 
@@ -622,21 +581,18 @@ func reset_panel() -> void:
 	_last_vote_signature = ""
 	_last_phase = ""
 	_showing_result = false
-	_result_auto_advance_time_left = 0.0
 	_auto_resolve_queued = false
 	_result_reveal_played = false
 	_voting_reveal_played = false
 	_hotseat_ai_nominate_attempted = false
 	_last_nominee_button_key = ""
 	_last_device_row_key = ""
+	if _synced_continue_bar and _synced_continue_bar.has_method("reset_local_state"):
+		_synced_continue_bar.reset_local_state()
 	_middle_content.visible = false
 	_middle_content.modulate = Color(1, 1, 1, 1)
 	_bottom_content.visible = false
 	_bottom_content.modulate = Color(1, 1, 1, 1)
-	_continue_button.visible = false
-	if _result_countdown_label:
-		_result_countdown_label.visible = false
-		_result_countdown_label.text = ""
 	_clear_nominee_buttons()
 	_clear_hotseat_device_row()
 	for child in _voter_grid.get_children():
@@ -664,33 +620,6 @@ func _on_vote_toggled(is_on: bool, player_id: int, is_yes: bool) -> void:
 			game_manager.rpc_submit_my_election_vote.rpc_id(1, is_yes)
 		else:
 			game_manager.set_election_vote(player_id, is_yes)
-
-func _on_continue_pressed() -> void:
-	if _showing_result:
-		_advance_after_result()
-		return
-	_resolve_election_and_show_result()
-
-func _advance_after_result() -> void:
-	if not _showing_result:
-		return
-	_showing_result = false
-	_result_auto_advance_time_left = 0.0
-	_continue_button.visible = false
-	if _result_countdown_label:
-		_result_countdown_label.visible = false
-		_result_countdown_label.text = ""
-	if game_manager and game_manager.state:
-		if game_manager.state.game_phase == "election" and _is_election_resolved(game_manager.state):
-			if game_manager.is_online_game():
-				game_manager.rpc_progress.rpc_id(1)
-			else:
-				game_manager.progress()
-		elif game_manager.state.game_phase == "round_end":
-			if game_manager.is_online_game():
-				game_manager.rpc_progress.rpc_id(1)
-			else:
-				game_manager.progress()
 
 func _resolve_election_and_show_result() -> void:
 	_auto_resolve_queued = false
@@ -730,18 +659,6 @@ func _play_voting_reveal_animation() -> void:
 	_middle_content.modulate = Color(1, 1, 1, 0)
 	var tween = create_tween()
 	tween.tween_property(_middle_content, "modulate:a", 1.0, 0.45).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-
-func _sync_election_result_chrome() -> void:
-	if _continue_button:
-		_continue_button.visible = false
-	if _result_countdown_label:
-		_result_countdown_label.visible = _showing_result
-
-
-func _update_continue_button_text() -> void:
-	if not _result_countdown_label or not _showing_result:
-		return
-	_result_countdown_label.text = "Next phase in %d…" % int(ceil(_result_auto_advance_time_left))
 
 # --- helpers ---
 

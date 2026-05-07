@@ -11,6 +11,7 @@ const COLOR_PATRICIAN_POLICY = Color(0.78, 0.2, 0.14, 0.85)
 const COLOR_PARCHMENT = Color(0.85, 0.75, 0.58, 1)
 const COLOR_PARCHMENT_TEXT = Color(0.2, 0.15, 0.08, 1)
 const GameManager = preload("res://scripts/game/game_manager.gd")
+const SyncedContinueBar = preload("res://scripts/ui/synced_continue_bar.gd")
 
 var game_manager = null
 
@@ -413,29 +414,18 @@ func _build_resolved_controls(state) -> void:
 		wait.add_theme_color_override("font_color", COLOR_CREAM)
 		_controls_box.add_child(wait)
 
-	var wait_lbl = Label.new()
-	wait_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	wait_lbl.add_theme_font_size_override("font_size", 18)
-	wait_lbl.add_theme_color_override("font_color", COLOR_CREAM)
-	_controls_box.add_child(wait_lbl)
-	_run_resolved_countdown_to_results(wait_lbl)
-
-func _resolved_countdown_seconds_word(n: int) -> String:
-	return "second" if n == 1 else "seconds"
-
-func _run_resolved_countdown_to_results(label: Label) -> void:
-	var total: int = int(roundf(GameManager.SPENDING_RESOLVED_TO_RESULT_SEC))
-	total = maxi(1, total)
-	for i in range(total, 0, -1):
-		if not is_instance_valid(self) or not is_instance_valid(label):
-			return
-		if not game_manager or not game_manager.state:
-			return
-		if game_manager.state.game_phase != "spending" or game_manager.state.spending_stage != "resolved":
-			return
-		label.text = "Proceeding to results in %d %s…" % [i, _resolved_countdown_seconds_word(i)]
-		if i > 1:
-			await get_tree().create_timer(1.0).timeout
+	var hint = Label.new()
+	hint.text = "When every living senator is ready — or time runs out — the chamber advances."
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_font_size_override("font_size", 16)
+	hint.add_theme_color_override("font_color", COLOR_DIM)
+	_controls_box.add_child(hint)
+	var bar = SyncedContinueBar.new()
+	bar.game_manager = game_manager
+	bar.expected_gate_kind = GameManager.CONTINUE_GATE_SPENDING_RESOLVED
+	bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_controls_box.add_child(bar)
 
 func _on_option_minus_pressed(option_key: String) -> void:
 	if _draft_option != option_key or _draft_amount <= 0:

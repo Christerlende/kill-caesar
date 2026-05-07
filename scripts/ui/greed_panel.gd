@@ -2,6 +2,8 @@ extends PanelContainer
 
 const GameManager = preload("res://scripts/game/game_manager.gd")
 
+const SyncedContinueBar = preload("res://scripts/ui/synced_continue_bar.gd")
+
 ## Full-screen Greed sequence after treasury failure (punishment IDs from GameManager.GREED_*).
 
 const PID_ROME_BURNS: int = GameManager.GREED_ROME_BURNS
@@ -18,7 +20,6 @@ const COLOR_ASH = Color(0.55, 0.12, 0.1, 0.95)
 
 const FADE_DELAY: float = 0.85
 const FADE_DURATION: float = 0.9
-const AUTO_ADVANCE_AFTER_FINAL_SEC: float = 5.0
 
 const INTRO_LINES: Array = [
 	"The senate's inaction creates unrest in all of Rome.",
@@ -37,6 +38,7 @@ var game_manager = null
 
 var _root: VBoxContainer
 var _content: VBoxContainer
+var _continue_bar: Node
 var _tween: Tween = null
 var _sequence_started: bool = false
 var _last_phase_key: String = ""
@@ -70,6 +72,10 @@ func _ready() -> void:
 	_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_root.add_child(_content)
 
+	_continue_bar = SyncedContinueBar.new()
+	_continue_bar.expected_gate_kind = GameManager.CONTINUE_GATE_GREED
+	_root.add_child(_continue_bar)
+
 func reset_panel() -> void:
 	_advance_generation += 1
 	if _tween:
@@ -77,12 +83,16 @@ func reset_panel() -> void:
 		_tween = null
 	_sequence_started = false
 	_last_phase_key = ""
+	if _continue_bar and _continue_bar.has_method("reset_local_state"):
+		_continue_bar.reset_local_state()
 	for c in _content.get_children():
 		c.queue_free()
 
 func _process(_delta: float) -> void:
 	if not game_manager:
 		return
+	if _continue_bar and _continue_bar.game_manager != game_manager:
+		_continue_bar.game_manager = game_manager
 	var state = game_manager.state
 	if not state:
 		return
@@ -136,31 +146,21 @@ func _start_sequence(state) -> void:
 		if item.apply:
 			_tween.tween_callback(_apply_punishment.bind(pid))
 	_tween.tween_interval(FADE_DELAY)
-	_tween.tween_callback(_schedule_auto_advance)
+	_tween.tween_callback(_open_greed_continue_gate.bind(_advance_generation))
 
 func _apply_punishment(punishment_id: int) -> void:
 	if game_manager:
 		game_manager.apply_greed_punishment(punishment_id)
 
-func _schedule_auto_advance() -> void:
-	var gen_at_schedule = _advance_generation
-	if not is_inside_tree():
+func _open_greed_continue_gate(gen_at_end: int) -> void:
+	if gen_at_end != _advance_generation:
 		return
-	get_tree().create_timer(AUTO_ADVANCE_AFTER_FINAL_SEC).timeout.connect(func():
-		if gen_at_schedule != _advance_generation:
-			return
-		if not game_manager or not game_manager.state:
-			return
-		if game_manager.state.game_phase != "greed":
-			return
-		if game_manager.is_online_game() and not game_manager.is_session_authority():
-			return
-		if game_manager.is_online_game():
-			game_manager.rpc_progress.rpc_id(1)
-		else:
-			game_manager.progress()
-		reset_panel()
-	, CONNECT_ONE_SHOT)
+	if not game_manager or not game_manager.state:
+		return
+	if game_manager.state.game_phase != "greed":
+		return
+	if game_manager.is_session_authority():
+		game_manager.open_continue_gate(GameManager.CONTINUE_GATE_GREED)
 
 func _punishment_sequence(pid: int) -> Array:
 	var out: Array = []

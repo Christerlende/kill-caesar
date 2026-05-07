@@ -161,11 +161,17 @@ func _sync_player_list_to_all(player_data: Dictionary) -> void:
 
 @rpc("authority", "reliable", "call_local")
 func start_game() -> void:
-	game_starting.emit([])
+	# Defer so this RPC can finish unwinding on the host before the lobby scene
+	# changes; otherwise call_local + synchronous game_starting can tear down the
+	# lobby mid-RPC and clients may never receive the start packet.
+	call_deferred("_emit_game_starting", [])
 
 @rpc("authority", "reliable", "call_local")
 func start_game_with_roles(roles: Array) -> void:
 	_role_reveal_ready_peers.clear()
+	call_deferred("_emit_game_starting", roles)
+
+func _emit_game_starting(roles: Array) -> void:
 	game_starting.emit(roles)
 
 ## Local human finished reading their role; host waits until every connected player has done so

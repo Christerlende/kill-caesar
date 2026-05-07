@@ -497,5 +497,95 @@
       "effect_params": { "gold_loss": 15 },
       "result_text": "Panic and opportunity struck together. Tokens multiplied in every living hand while purses lightened to pay for the spectacle.\nAll living players gain an assassination token (if possible) and lose 15 gold."
     }
+  },
+  {
+    "id": 26,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Plebeians gain +2 gold per round for three rounds",
+      "beneficiary": "plebeian",
+      "effect_type": "set_plebeian_passive_income_bonus",
+      "effect_params": { "amount": 2, "rounds": 3 },
+      "result_text": "The people's grain stipend was written into the law for three distributions. Each time the ledgers opened, Plebeian purses grew a little heavier before the taxmen came.\nPlebeians +2 gold with passive income each round for 3 rounds."
+    },
+    "option_b": {
+      "text": "Two random Plebeians gain +1 assassination token",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_two_distinct_assassination_tokens_plebeian",
+      "effect_params": {},
+      "result_text": "Two sealed tokens found their way into the lower wards, each to a different hand. The Forum wondered who would strike first.\nTwo distinct random living Plebeians each gain an assassination token if they can hold one."
+    }
+  },
+  {
+    "id": 27,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "Each Plebeian gains 5 gold",
+      "beneficiary": "plebeian",
+      "effect_type": "gold_by_role",
+      "effect_params": { "role": "plebeian", "amount": 5 },
+      "result_text": "Wages and relief flowed downward at once, and the alleys counted coins that had once stopped at the gates of villas.\nPlebeian representatives +5 gold."
+    },
+    "option_b": {
+      "text": "One random Patrician or Caesar gains +1 assassination counter",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_one_assassination_counter_random_patrician_or_caesar",
+      "effect_params": {},
+      "result_text": "Whispers named no author, but one high seat felt the knives draw closer in the dark.\nOne random living Patrician or Caesar gains +1 assassination counter."
+    }
+  },
+  {
+    "id": 28,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "All players lose all assassination counters (except if dead)",
+      "beneficiary": "plebeian",
+      "effect_type": "remove_all_assassination_counters_on_living_players",
+      "effect_params": {},
+      "result_text": "The Senate ordered every blade-hurry on the floor struck from the record. Threat markers vanished from living names; purses of secrets stayed shut.\nAll assassination counters on living players are removed."
+    },
+    "option_b": {
+      "text": "The Consul and co-consul remain for another round",
+      "beneficiary": "plebeian",
+      "effect_type": "retain_consul_pair_next_turnover",
+      "effect_params": {},
+      "result_text": "The assembly granted a rare continuity of office. The same two magistrates would gavel the next law without a fresh election between them.\nNext turnover: Consul does not rotate; the current co-consul keeps the office (no election phase)."
+    }
+  },
+  {
+    "id": 29,
+    "faction": "patrician",
+    "option_a": {
+      "text": "The co-consul gains 10 gold",
+      "beneficiary": "patrician",
+      "effect_type": "gold_to_current_co_consul",
+      "effect_params": { "amount": 10 },
+      "result_text": "A second purse was filled beside the chief magistrate's, sealed with Patrician wax.\nThe co-consul gains 10 gold if seated."
+    },
+    "option_b": {
+      "text": "Two random representatives lose 5 gold",
+      "beneficiary": "patrician",
+      "effect_type": "random_players_lose_gold",
+      "effect_params": { "count": 2, "amount": 5 },
+      "result_text": "Auditors moved in pairs, and two ledgers came up short without a public trial.\nTwo random living players each lose 5 gold."
+    }
+  },
+  {
+    "id": 30,
+    "faction": "plebeian",
+    "option_a": {
+      "text": "All gold is distributed evenly",
+      "beneficiary": "plebeian",
+      "effect_type": "redistribute_all_gold_evenly_among_living",
+      "effect_params": {},
+      "result_text": "A general audit leveled every open purse among the living. What could not be split evenly vanished into rumor—no one knew another's tally anyway.\nTotal gold among living players is split evenly; remainder is removed from the game."
+    },
+    "option_b": {
+      "text": "Plebeians +1 influence",
+      "beneficiary": "plebeian",
+      "effect_type": "grant_influence",
+      "effect_params": { "faction": "plebeian", "amount": 1 },
+      "result_text": "The people's chorus bent the scales again; another notch toward the Forum's own ambitions.\nPlebeian influence +1."
+    }
   }
 ]

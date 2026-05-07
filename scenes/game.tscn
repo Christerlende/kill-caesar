@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://scripts/ui/round_start_panel.gd" id="9"]
 [ext_resource type="Script" path="res://scripts/ui/greed_panel.gd" id="10"]
 [ext_resource type="Script" path="res://scripts/ui/award_panel.gd" id="11"]
+[ext_resource type="Script" path="res://scripts/ui/round_phase_strip.gd" id="12"]
 
 [node name="Game" type="Node" unique_id=1989461786]
 script = ExtResource("1")
@@ -127,10 +128,15 @@ layout_mode = 2
 text = "0/7"
 vertical_alignment = 1
 
-[node name="ActorPromptLabel" type="Label" parent="GameUI/TopHudPanel/HudMargin/HudVBox" unique_id=827301785]
+[node name="PhaseOverviewContainer" type="VBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox" unique_id=827301785]
 layout_mode = 2
-text = "Current actor: -"
-autowrap_mode = 3
+size_flags_horizontal = 3
+
+[node name="RoundPhaseStrip" type="HBoxContainer" parent="GameUI/TopHudPanel/HudMargin/HudVBox/PhaseOverviewContainer" unique_id=827301786]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+script = ExtResource("12")
 
 [node name="HiddenInfoPanel" type="PanelContainer" parent="GameUI" unique_id=1393407527]
 layout_mode = 1

@@ -2,12 +2,14 @@ extends Control
 
 const ROME_COLLAPSE_WINNER: String = "collapse"
 const GM = preload("res://scripts/game/game_manager.gd")
+const SyncedContinueBar = preload("res://scripts/ui/synced_continue_bar.gd")
 
 var game_manager
 var round_label: Label
 var influence_label: Label
 var consul_label: Label
-var actor_prompt_label: Label
+var phase_overview_container: VBoxContainer
+var round_phase_strip: HBoxContainer
 var nominee_buttons_container: HBoxContainer
 var election_votes_container: VBoxContainer
 var policy_discard_buttons_container: HBoxContainer
@@ -88,7 +90,9 @@ func _ready():
 	round_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/RoundLabel")
 	influence_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/InfluenceLabel")
 	consul_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/HudTopRow/ConsulLabel")
-	actor_prompt_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/ActorPromptLabel")
+	phase_overview_container = get_node_or_null("TopHudPanel/HudMargin/HudVBox/PhaseOverviewContainer")
+	if phase_overview_container:
+		round_phase_strip = phase_overview_container.get_node_or_null("RoundPhaseStrip")
 	patrician_influence_bar = get_node_or_null("TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianBarValueRow/PatricianInfluenceBar")
 	plebeian_influence_bar = get_node_or_null("TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PlebeianBarBox/PlebeianBarValueRow/PlebeianInfluenceBar")
 	patrician_influence_value_label = get_node_or_null("TopHudPanel/HudMargin/HudVBox/InfluenceBarsRow/PatricianBarBox/PatricianBarValueRow/PatricianInfluenceValue")
@@ -101,11 +105,6 @@ func _ready():
 		influence_label = $VBoxContainer.get_node_or_null("InfluenceLabel")
 	if not consul_label:
 		consul_label = $VBoxContainer.get_node_or_null("ConsulLabel")
-	if not actor_prompt_label:
-		actor_prompt_label = $VBoxContainer.get_node_or_null("ActorPromptLabel")
-	if actor_prompt_label:
-		# Keep this as a single line to avoid temporary startup overlap with middle panel.
-		actor_prompt_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 
 	# grab legacy/main control containers
 	nominee_buttons_container = $VBoxContainer.get_node_or_null("NomineeButtonsContainer")
@@ -118,7 +117,7 @@ func _ready():
 		player_purses_label = $VBoxContainer.get_node_or_null("PlayerPursesLabel")
 	phase_info_label = $VBoxContainer.get_node_or_null("PhaseInfoLabel")
 	next_button = $VBoxContainer.get_node_or_null("NextButton")
-	print("labels:", round_label, influence_label, consul_label, actor_prompt_label, nominee_buttons_container, election_votes_container, policy_discard_buttons_container, spending_controls_container, player_purses_label, phase_info_label, "button", next_button)
+	print("labels:", round_label, influence_label, consul_label, phase_overview_container, nominee_buttons_container, election_votes_container, policy_discard_buttons_container, spending_controls_container, player_purses_label, phase_info_label, "button", next_button)
 
 	# hide legacy duplicated labels when persistent HUD is available
 	var legacy_round = $VBoxContainer.get_node_or_null("RoundLabel")
@@ -131,7 +130,7 @@ func _ready():
 	if legacy_consul and legacy_consul != consul_label:
 		legacy_consul.visible = false
 	var legacy_actor = $VBoxContainer.get_node_or_null("ActorPromptLabel")
-	if legacy_actor and legacy_actor != actor_prompt_label:
+	if legacy_actor:
 		legacy_actor.visible = false
 	var legacy_hidden = $VBoxContainer.get_node_or_null("PlayerPursesLabel")
 	if legacy_hidden and legacy_hidden != player_purses_label:
@@ -428,18 +427,18 @@ func _build_chaos_counter_hud() -> void:
 	var hud_vbox = get_node_or_null("TopHudPanel/HudMargin/HudVBox")
 	if not hud_vbox or not game_manager:
 		return
-	var actor_prompt = actor_prompt_label if actor_prompt_label else hud_vbox.get_node_or_null("ActorPromptLabel")
-	if not actor_prompt or actor_prompt.get_parent() != hud_vbox:
+	var overview = phase_overview_container if phase_overview_container else hud_vbox.get_node_or_null("PhaseOverviewContainer")
+	if not overview or overview.get_parent() != hud_vbox:
 		return
-	var insert_idx: int = actor_prompt.get_index()
-	hud_vbox.remove_child(actor_prompt)
+	var insert_idx: int = overview.get_index()
+	hud_vbox.remove_child(overview)
 
 	_chaos_hud_row = HBoxContainer.new()
 	_chaos_hud_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_chaos_hud_row.add_theme_constant_override("separation", 10)
-	actor_prompt.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	actor_prompt.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_chaos_hud_row.add_child(actor_prompt)
+	overview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	overview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_chaos_hud_row.add_child(overview)
 
 	var block = VBoxContainer.new()
 	block.size_flags_horizontal = Control.SIZE_SHRINK_END
@@ -580,8 +579,9 @@ func _process(_delta):
 		else:
 			var viewer_role = state.players[vg].role
 			gold_gain_label.text = "Gold gain each round: %d" % _gold_gain_for_role(viewer_role)
-	if actor_prompt_label:
-		actor_prompt_label.text = _build_actor_prompt_text(state)
+	var collapse: bool = state.game_phase == "game_over" and GM.last_winner_text == ROME_COLLAPSE_WINNER
+	if round_phase_strip and round_phase_strip.has_method("sync"):
+		round_phase_strip.sync(state, game_manager, collapse, _build_phase_subtitle_text(state))
 	_update_chaos_counter_hud(state)
 	if election_panel:
 		_apply_action_panel_frame(election_panel)
@@ -748,6 +748,11 @@ func _update_election_vote_buttons(state) -> void:
 		elif vote_state == 0:
 			vote_text = "NO"
 		var label = Label.new()
+		if not state.players[player_id].is_dead and not game_manager.is_player_election_vote_required(player_id):
+			label.text = "%s vote: Silenced (cannot vote this round)" % _player_name(player_id)
+			row.add_child(label)
+			election_votes_container.add_child(row)
+			continue
 		label.text = "%s vote: %s" % [_player_name(player_id), vote_text]
 		var yes_button = Button.new()
 		yes_button.text = "Yes"
@@ -797,7 +802,13 @@ func _int_list_signature(values: Array) -> String:
 func _update_spending_controls(state) -> void:
 	if not spending_controls_container:
 		return
-	var ui_key = "%s|%s|%d|%s|%d" % [state.game_phase, state.spending_stage, state.spending_input_player_index, _spend_selected_option, _spend_amount_draft]
+	var ui_key = "%s|%s|%d|%s|%d" % [
+		state.game_phase,
+		state.spending_stage,
+		game_manager.get_policy_viewer_seat(),
+		_spend_selected_option,
+		_spend_amount_draft,
+	]
 	if ui_key == _spending_ui_key:
 		return
 	_spending_ui_key = ui_key
@@ -807,6 +818,12 @@ func _update_spending_controls(state) -> void:
 		return
 	if state.spending_stage == "input":
 		var player_id = game_manager.get_current_spending_player_id()
+		if player_id < 0 or player_id >= state.players.size():
+			var claim = Label.new()
+			claim.text = "Claim your seat (election panel) to render tribute from this sidebar."
+			claim.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			spending_controls_container.add_child(claim)
+			return
 		var money = game_manager.get_current_spending_player_money()
 		if _spend_player_id_draft != player_id:
 			_spend_player_id_draft = player_id
@@ -876,10 +893,12 @@ func _update_spending_controls(state) -> void:
 		var done = Label.new()
 		done.text = "All private spending captured. Totals are now public."
 		spending_controls_container.add_child(done)
-		var continue_button = Button.new()
-		continue_button.text = "Continue"
-		continue_button.pressed.connect(Callable(self, "_on_spending_continue_pressed"))
-		spending_controls_container.add_child(continue_button)
+		if not state.greed_round:
+			var bar = SyncedContinueBar.new()
+			bar.game_manager = game_manager
+			bar.expected_gate_kind = GM.CONTINUE_GATE_SPENDING_RESOLVED
+			bar.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+			spending_controls_container.add_child(bar)
 
 func _sidebar_policy_viewer_index(state) -> int:
 	if not game_manager or state.players.size() == 0:
@@ -942,17 +961,21 @@ func _gold_gain_for_role(role: int) -> int:
 func _build_actor_prompt_text(state) -> String:
 	var actor_text = "Current actor: "
 	match state.game_phase:
+		"init":
+			actor_text += "Preparing Rome"
+		"round_start":
+			actor_text += "The Curia gathers for a new round"
 		"election":
 			if state.election_nominee_index < 0:
 				actor_text += "Consul chooses a co-consul nominee"
 			elif not game_manager.are_election_votes_complete():
-				actor_text += "All players vote Yes/No"
+				actor_text += "All representatives cast their vote"
 			else:
-				actor_text += "Resolve election"
+				actor_text += "Election result."
 		"policy":
 			var pst = game_manager.get_policy_discard_stage()
 			if pst == "reveal":
-				actor_text += "Decree revealed — advancing to tribute"
+				actor_text += "Decree reveal"
 			elif pst == "consul":
 				actor_text += "Consul discards one policy"
 			elif pst == "co_consul":
@@ -962,29 +985,45 @@ func _build_actor_prompt_text(state) -> String:
 		"spending":
 			if state.spending_stage == "input":
 				var vs: int = game_manager.get_policy_viewer_seat()
-				var active_sp: int = state.spending_input_player_index
 				if vs < 0 or vs >= state.players.size():
 					actor_text += "Private tribute — claim your seat to participate"
 				elif vs < state.spending_confirmed_players.size() and state.spending_confirmed_players[vs]:
 					actor_text += "You have rendered tribute — waiting on others"
-				elif vs == active_sp:
-					actor_text += "Cast your private treasury vote"
 				else:
-					actor_text += "Waiting for other representatives to cast tribute"
+					actor_text += "Cast your private treasury vote"
 			elif state.spending_stage == "handoff":
 				actor_text += "Pass to next player"
 			elif state.spending_stage == "resolved":
-				actor_text += "Resolve spending and continue"
+				actor_text += "Resolve tribute"
 			else:
 				actor_text += "Spending"
+		"greed":
+			actor_text += "Chaos claims the empty treasury — witness the reckoning"
+		"result":
+			actor_text += "The Senate reads this round’s judgment"
+		"award":
+			actor_text += "Consul — privilege of office"
 		"round_end":
 			actor_text += "Starting next round"
+		"game_over":
+			actor_text += "The republic has chosen its fate"
 		_:
 			actor_text += state.game_phase
 
 	if _round_transition_time_left > 0.0 and _round_transition_message != "":
 		return "%s | %s" % [_round_transition_message, actor_text]
 	return actor_text
+
+
+func _build_phase_subtitle_text(state) -> String:
+	var full: String = _build_actor_prompt_text(state)
+	const PREFIX := "Current actor: "
+	full = full.trim_prefix(PREFIX)
+	const MAX_LEN := 140
+	if full.length() > MAX_LEN:
+		return full.substr(0, MAX_LEN - 1) + "…"
+	return full
+
 
 func _build_phase_text(state) -> String:
 	var lines = ["Phase: %s" % state.game_phase]
@@ -1042,15 +1081,12 @@ func _build_phase_text(state) -> String:
 	if state.game_phase == "spending" and state.spending_stage == "input":
 		lines.append("")
 		var vph: int = game_manager.get_policy_viewer_seat()
-		var act_p: int = state.spending_input_player_index
 		if vph < 0 or vph >= state.players.size():
 			lines.append("Private tribute: claim your seat to see your status.")
 		elif vph < state.spending_confirmed_players.size() and state.spending_confirmed_players[vph]:
 			lines.append("You have rendered tribute. Waiting on other representatives.")
-		elif vph == act_p:
-			lines.append("Cast your treasury vote on one decree (main panel).")
 		else:
-			lines.append("Other representatives are casting tribute before you.")
+			lines.append("Cast your treasury vote on one decree (main panel).")
 	elif state.game_phase == "spending" and state.spending_stage == "handoff":
 		lines.append("")
 		lines.append("Pass device to next player")
@@ -1163,11 +1199,3 @@ func _on_spending_pay_pressed() -> void:
 	else:
 		game_manager.set_spending_allocation(_spend_selected_option, _spend_amount_draft)
 	_spending_ui_key = ""
-
-func _on_spending_continue_pressed() -> void:
-	if game_manager.state.greed_round:
-		return
-	if game_manager.is_online_game():
-		game_manager.rpc_progress.rpc_id(1)
-	else:
-		game_manager.progress()
